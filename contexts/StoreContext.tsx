@@ -60,7 +60,7 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
       setRequests(r);
       setSpecialties(s);
     } catch (error) {
-      console.error("Failed to load data", error);
+      console.error("Failed to load data. The project might be paused or tables are missing.", error);
     }
   };
 
@@ -93,6 +93,9 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
     }
   };
 
+  /**
+   * REGRA: Registro público pelo site sempre cria conta de PARENT (Responsável).
+   */
   const register = async (name: string, email: string, password?: string) => {
     setIsLoading(true);
     try {
@@ -100,14 +103,15 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
         name,
         email,
         password,
-        role: 'PARENT', // Sempre responsável ao criar pelo site
+        role: 'PARENT', // FORÇADO: Usuários que se cadastram pelo site são sempre Responsáveis
         permissions: ['criar_solicitacao', 'visualizar_pacientes']
       });
       setUsers(prev => [...prev, newUser]);
       setCurrentUser(newUser);
       return { success: true };
     } catch (error: any) {
-      return { success: false, error: error.message };
+      console.error("Register error:", error);
+      return { success: false, error: error.message || "Erro desconhecido ao cadastrar." };
     } finally {
       setIsLoading(false);
     }
@@ -115,7 +119,6 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
 
   const logout = () => setCurrentUser(null);
 
-  // Fix: Added the missing addPatient implementation
   const addPatient = async (data: Omit<Patient, 'id'>) => {
     setIsLoading(true);
     try {
@@ -123,22 +126,27 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
       setPatients(prev => [...prev, newP]);
     } catch (e) {
       console.error("Failed to add patient", e);
-      alert('Erro ao adicionar paciente');
+      alert('Erro ao adicionar paciente. Verifique se o banco de dados está ativo.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  /**
+   * REGRA: Apenas administradores logados podem criar usuários via painel (Admin/Therapist).
+   */
   const addUser = async (data: Omit<User, 'id'>) => {
     if (currentUser?.role !== 'ADMIN') {
-      alert('Acesso negado: apenas administradores podem criar usuários.');
+      alert('Acesso negado: apenas administradores podem criar contas de Terapeutas ou Admins.');
       return;
     }
     setIsLoading(true);
     try {
       const newU = await api.users.create(data);
       setUsers(prev => [...prev, newU]);
-    } catch(e) { alert('Erro ao adicionar usuário'); }
+    } catch(e: any) { 
+      alert('Erro ao adicionar usuário: ' + (e.message || 'Erro desconhecido')); 
+    }
     setIsLoading(false);
   };
 
@@ -154,19 +162,28 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   const deleteUser = async (id: string) => {
-    setIsLoading(true);
-    const success = await api.users.delete(id);
-    if (success) setUsers(prev => prev.filter(u => u.id !== id));
-    setIsLoading(false);
+    if (id === currentUser?.id) {
+        alert("Você não pode excluir sua própria conta administrativa.");
+        return;
+    }
+    if (window.confirm("Deseja realmente excluir este usuário?")) {
+        setIsLoading(true);
+        const success = await api.users.delete(id);
+        if (success) setUsers(prev => prev.filter(u => u.id !== id));
+        setIsLoading(false);
+    }
   };
 
   const createRequest = async (data: Partial<ReportRequest>) => {
     if (!currentUser) return;
     setIsLoading(true);
-    const newReq = await api.requests.create({ ...data, parentId: currentUser.id });
-    setRequests(prev => [newReq, ...prev]);
-    if (currentUser.role === 'PARENT') setTimeout(() => playSound('NEW_REQUEST'), 500);
-    setIsLoading(false);
+    try {
+      const newReq = await api.requests.create({ ...data, parentId: currentUser.id });
+      setRequests(prev => [newReq, ...prev]);
+      if (currentUser.role === 'PARENT') setTimeout(() => playSound('NEW_REQUEST'), 500);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const assignTherapist = async (requestId: string, therapistId: string) => {

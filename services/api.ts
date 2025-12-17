@@ -1,8 +1,27 @@
+
 import { User, Patient, ReportRequest, Specialty } from '../types';
 import { supabase } from './supabase';
 
-// Helper para gerar IDs compatíveis com o tipo TEXT do banco
 const generateId = () => Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+
+const handleSupabaseError = (error: any) => {
+    if (error) {
+        console.error("Supabase Error Details:", error);
+        
+        // PGRST116: maybeSingle() didn't find a record
+        if (error.code === 'PGRST116') return null;
+
+        // Erro comum de projeto pausado ou tabelas não criadas
+        if (error.message?.includes('fetch') || error.code === '42P01') {
+            const msg = "O banco de dados está inacessível. O projeto Supabase pode estar pausado ou as tabelas não foram criadas via SQL Editor.";
+            alert(msg);
+            throw new Error(msg);
+        }
+        
+        throw error;
+    }
+    return null;
+};
 
 export const api = {
   auth: {
@@ -13,15 +32,11 @@ export const api = {
           .select('*')
           .eq('email', email)
           .eq('password', password)
-          .maybeSingle(); // maybeSingle evita erro se não encontrar
+          .maybeSingle();
 
-        if (error) {
-            console.error('Login error:', error);
-            return null;
-        }
+        handleSupabaseError(error);
         return data as User;
       } catch (e) {
-        console.error("Auth Exception:", e);
         return null;
       }
     }
@@ -29,42 +44,23 @@ export const api = {
 
   users: {
     getAll: async (): Promise<User[]> => {
-      const { data } = await supabase.from('users').select('*');
-      return (data as User[]) || [];
+      try {
+        const { data, error } = await supabase.from('users').select('*');
+        handleSupabaseError(error);
+        return (data as User[]) || [];
+      } catch (e) {
+        return [];
+      }
     },
     create: async (data: Omit<User, 'id'>): Promise<User> => {
-      // 1. Verifica duplicidade de forma segura
-      const { data: existing, error: checkError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', data.email)
-        .maybeSingle();
-
-      if (checkError) {
-        console.error("Erro ao verificar usuário:", checkError);
-        throw new Error("Erro de conexão ao verificar e-mail.");
-      }
-
-      if (existing) {
-          throw new Error("Este e-mail já está cadastrado.");
-      }
-
-      // 2. Prepara dados
       const newUser = { ...data, id: generateId() };
-      
-      // 3. Insere
-      const { data: inserted, error: insertError } = await supabase
+      const { data: inserted, error } = await supabase
         .from('users')
         .insert(newUser)
         .select()
         .single();
       
-      if (insertError) {
-          console.error("Erro ao criar usuário no Supabase:", insertError);
-          // Retorna mensagem amigável se a tabela não existir
-          if (insertError.code === '42P01') throw new Error("Erro interno: Tabelas do banco de dados não encontradas. Execute o script SQL.");
-          throw new Error(`Erro ao salvar dados: ${insertError.message}`);
-      }
+      handleSupabaseError(error);
       return inserted as User;
     },
     update: async (id: string, data: Partial<User>): Promise<User | null> => {
@@ -75,19 +71,13 @@ export const api = {
         .select()
         .single();
       
-      if (error) {
-          console.error("Update User Error:", error);
-          return null;
-      }
+      handleSupabaseError(error);
       return updated as User;
     },
     delete: async (id: string): Promise<boolean> => {
       const { error } = await supabase.from('users').delete().eq('id', id);
-      if (error) {
-          console.error("Delete User Error:", error);
-          return false;
-      }
-      return true;
+      handleSupabaseError(error);
+      return !error;
     },
     updateSignature: async (userId: string, signatureUrl: string): Promise<User | null> => {
       const { data, error } = await supabase
@@ -97,19 +87,18 @@ export const api = {
         .select()
         .single();
         
-      if (error) return null;
+      handleSupabaseError(error);
       return data as User;
-    },
-    getById: async (id: string): Promise<User | undefined> => {
-        const { data } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
-        return data as User || undefined;
     }
   },
 
   patients: {
     getAll: async (): Promise<Patient[]> => {
-      const { data } = await supabase.from('patients').select('*');
-      return (data as Patient[]) || [];
+      try {
+        const { data, error } = await supabase.from('patients').select('*');
+        handleSupabaseError(error);
+        return (data as Patient[]) || [];
+      } catch (e) { return []; }
     },
     create: async (data: Omit<Patient, 'id'>): Promise<Patient> => {
       const newPatient = { ...data, id: generateId() };
@@ -119,15 +108,18 @@ export const api = {
         .select()
         .single();
 
-      if (error) throw error;
+      handleSupabaseError(error);
       return inserted as Patient;
     }
   },
 
   specialties: {
     getAll: async (): Promise<Specialty[]> => {
-        const { data } = await supabase.from('specialties').select('*');
-        return (data as Specialty[]) || [];
+        try {
+            const { data, error } = await supabase.from('specialties').select('*');
+            handleSupabaseError(error);
+            return (data as Specialty[]) || [];
+        } catch (e) { return []; }
     },
     create: async (name: string): Promise<Specialty> => {
         const newSpec = { id: generateId(), name };
@@ -137,7 +129,7 @@ export const api = {
             .select()
             .single();
             
-        if (error) throw error;
+        handleSupabaseError(error);
         return data as Specialty;
     },
     update: async (id: string, name: string): Promise<Specialty | null> => {
@@ -148,19 +140,23 @@ export const api = {
             .select()
             .single();
         
-        if (error) return null;
+        handleSupabaseError(error);
         return data as Specialty;
     },
     delete: async (id: string): Promise<boolean> => {
         const { error } = await supabase.from('specialties').delete().eq('id', id);
+        handleSupabaseError(error);
         return !error;
     }
   },
 
   requests: {
     getAll: async (): Promise<ReportRequest[]> => {
-      const { data } = await supabase.from('requests').select('*');
-      return (data as ReportRequest[]) || [];
+      try {
+        const { data, error } = await supabase.from('requests').select('*');
+        handleSupabaseError(error);
+        return (data as ReportRequest[]) || [];
+      } catch (e) { return []; }
     },
     create: async (data: Partial<ReportRequest>): Promise<ReportRequest> => {
       const newRequest = {
@@ -177,10 +173,7 @@ export const api = {
         .select()
         .single();
 
-      if (error) {
-          console.error("Erro ao criar request", error);
-          throw error;
-      }
+      handleSupabaseError(error);
       return inserted as ReportRequest;
     },
     update: async (id: string, updates: Partial<ReportRequest>): Promise<ReportRequest | null> => {
@@ -191,11 +184,12 @@ export const api = {
         .select()
         .single();
 
-      if (error) return null;
+      handleSupabaseError(error);
       return data as ReportRequest;
     },
     delete: async (id: string): Promise<boolean> => {
       const { error } = await supabase.from('requests').delete().eq('id', id);
+      handleSupabaseError(error);
       return !error;
     }
   }
