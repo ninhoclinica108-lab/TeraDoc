@@ -18,7 +18,7 @@ export const api = {
         email,
         password: password || '',
         options: {
-          data: { name, role: 'PARENT' } // Metadados usados pelo trigger SQL
+          data: { name, role: 'PARENT' }
         }
       });
       if (error) throw error;
@@ -36,14 +36,28 @@ export const api = {
       await supabase.auth.signOut();
     },
     getSessionUser: async (): Promise<User | null> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) return null;
       
-      const { data: profile } = await supabase
+      // Tentar buscar o perfil na tabela pública
+      let { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', user.id)
         .single();
+      
+      // Se o perfil não existir ainda (delay do trigger), retorna um objeto temporário
+      // para não deslogar o usuário imediatamente
+      if (!profile) {
+        console.warn("Perfil não encontrado na tabela pública. Usando metadados do Auth.");
+        return {
+          id: user.id,
+          name: user.user_metadata?.name || 'Usuário',
+          email: user.email || '',
+          role: (user.user_metadata?.role as any) || 'PARENT',
+          permissions: []
+        };
+      }
         
       return profile as User;
     }
@@ -108,7 +122,6 @@ export const api = {
     }
   },
 
-  // Added specialties CRUD to fix missing methods in AdminDashboard
   specialties: {
     getAll: async (): Promise<Specialty[]> => {
       const { data, error } = await supabase.from('specialties').select('*');
