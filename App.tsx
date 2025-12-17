@@ -70,19 +70,24 @@ const MainLayout = () => {
   const { currentUser, logout, themeMode, toggleTheme } = useStore();
   if (!currentUser) return <LoginScreen />;
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      <header className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 sticky top-0 z-40 h-16 flex justify-between items-center px-4 sm:px-8">
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900 transition-colors duration-300 overflow-hidden">
+      <header className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 sticky top-0 z-40 h-16 shrink-0 flex justify-between items-center px-4 sm:px-8 shadow-sm">
         <div className="flex items-center gap-3">
           <img src="https://static.vecteezy.com/system/resources/previews/021/437/132/non_2x/world-autism-awareness-day-ribbon-free-png.png" className="w-8 h-8" alt="Logo" />
           <span className="font-bold text-xl text-teal-700 dark:text-white">TeraDoc</span>
         </div>
         <div className="flex items-center gap-4">
           <button onClick={toggleTheme} className="p-2 text-gray-400 hover:text-teal-500 transition-colors">{themeMode === 'light' ? <Moon size={20}/> : <Sun size={20}/>}</button>
-          <div className="text-right hidden sm:block"><p className="text-sm font-bold dark:text-white leading-none">{currentUser.name}</p><p className="text-[10px] text-gray-500 uppercase font-bold mt-1">{currentUser.role === 'PARENT' ? 'Responsável' : currentUser.role}</p></div>
+          <div className="text-right hidden sm:block">
+            <p className="text-sm font-bold dark:text-white leading-none">{currentUser.name}</p>
+            <p className="text-[10px] text-gray-500 uppercase font-bold mt-1">
+              {currentUser.role === 'PARENT' ? 'Responsável' : currentUser.role}
+            </p>
+          </div>
           <button onClick={logout} className="p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"><LogOut size={20}/></button>
         </div>
       </header>
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-8">
+      <main className="flex-1 overflow-hidden relative">
         {currentUser.role === 'PARENT' && <ParentDashboard />}
         {currentUser.role === 'ADMIN' && <AdminDashboard />}
         {currentUser.role === 'THERAPIST' && <TherapistDashboard />}
