@@ -25,12 +25,13 @@ const LoginScreen = () => {
       return;
     }
 
-    let success;
     if (isRegistering) {
-        success = await register(name, email, password);
-        if (!success) setError('Erro ao criar conta. Verifique se o e-mail já existe ou a conexão.');
+        const result = await register(name, email, password);
+        if (!result.success) {
+             setError(result.error || 'Erro ao criar conta.');
+        }
     } else {
-        success = await login(email, password);
+        const success = await login(email, password);
         if (!success) setError('E-mail ou senha incorretos.');
     }
   };

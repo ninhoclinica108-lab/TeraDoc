@@ -5,7 +5,7 @@ import { api } from '../services/api';
 
 interface StoreContextType extends AppState {
   login: (email: string, password?: string) => Promise<boolean>;
-  register: (name: string, email: string, password?: string) => Promise<boolean>;
+  register: (name: string, email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   toggleTheme: () => void;
   addPatient: (patient: Omit<Patient, 'id'>) => Promise<void>;
@@ -51,7 +51,6 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
   });
 
   const loadData = async () => {
-      // Não bloqueia UI com loading full screen se já tiver dados, mas atualiza
       try {
           const [u, p, r, s] = await Promise.all([
               api.users.getAll(),
@@ -93,7 +92,7 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
         const user = await api.auth.login(email, password);
         if (user) {
             setCurrentUser(user);
-            await loadData(); // Recarrega dados ao logar para garantir frescor
+            await loadData();
             return true;
         }
         return false;
@@ -109,16 +108,16 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
             name,
             email,
             password,
-            role: 'PARENT', // Auto-registro é sempre Responsável
+            role: 'PARENT', 
             permissions: ['criar_solicitacao', 'visualizar_pacientes']
         });
         
         setUsers(prev => [...prev, newUser]);
-        setCurrentUser(newUser); // Loga automaticamente
-        return true;
-    } catch (error) {
-        console.error("Registration error in context:", error);
-        return false;
+        setCurrentUser(newUser);
+        return { success: true };
+    } catch (error: any) {
+        console.error("Registration error:", error);
+        return { success: false, error: error.message || "Erro desconhecido ao registrar." };
     } finally {
         setIsLoading(false);
     }
@@ -128,15 +127,19 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
 
   const addPatient = async (data: Omit<Patient, 'id'>) => {
     setIsLoading(true);
-    const newP = await api.patients.create(data);
-    setPatients(prev => [...prev, newP]);
+    try {
+      const newP = await api.patients.create(data);
+      setPatients(prev => [...prev, newP]);
+    } catch(e) { console.error(e); alert('Erro ao adicionar paciente'); }
     setIsLoading(false);
   };
 
   const addUser = async (data: Omit<User, 'id'>) => {
     setIsLoading(true);
-    const newU = await api.users.create(data);
-    setUsers(prev => [...prev, newU]);
+    try {
+      const newU = await api.users.create(data);
+      setUsers(prev => [...prev, newU]);
+    } catch(e) { console.error(e); alert('Erro ao adicionar usuário'); }
     setIsLoading(false);
   };
 

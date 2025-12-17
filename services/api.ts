@@ -12,8 +12,8 @@ export const api = {
           .from('users')
           .select('*')
           .eq('email', email)
-          .eq('password', password) // Comparação direta conforme solicitado
-          .single();
+          .eq('password', password)
+          .maybeSingle(); // maybeSingle evita erro se não encontrar
 
         if (error) {
             console.error('Login error:', error);
@@ -33,23 +33,37 @@ export const api = {
       return (data as User[]) || [];
     },
     create: async (data: Omit<User, 'id'>): Promise<User> => {
-      // Verifica duplicidade antes de tentar criar
-      const { data: existing } = await supabase.from('users').select('id').eq('email', data.email).single();
-      if (existing) {
-          throw new Error("Email already registered");
+      // 1. Verifica duplicidade de forma segura
+      const { data: existing, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', data.email)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error("Erro ao verificar usuário:", checkError);
+        throw new Error("Erro de conexão ao verificar e-mail.");
       }
 
+      if (existing) {
+          throw new Error("Este e-mail já está cadastrado.");
+      }
+
+      // 2. Prepara dados
       const newUser = { ...data, id: generateId() };
       
-      const { data: inserted, error } = await supabase
+      // 3. Insere
+      const { data: inserted, error: insertError } = await supabase
         .from('users')
         .insert(newUser)
         .select()
         .single();
       
-      if (error) {
-          console.error("Create User Error:", error);
-          throw error;
+      if (insertError) {
+          console.error("Erro ao criar usuário no Supabase:", insertError);
+          // Retorna mensagem amigável se a tabela não existir
+          if (insertError.code === '42P01') throw new Error("Erro interno: Tabelas do banco de dados não encontradas. Execute o script SQL.");
+          throw new Error(`Erro ao salvar dados: ${insertError.message}`);
       }
       return inserted as User;
     },
@@ -65,7 +79,7 @@ export const api = {
       return data as User;
     },
     getById: async (id: string): Promise<User | undefined> => {
-        const { data } = await supabase.from('users').select('*').eq('id', id).single();
+        const { data } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
         return data as User || undefined;
     }
   },
