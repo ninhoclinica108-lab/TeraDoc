@@ -37,25 +37,36 @@ const LoginScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-200 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4 transition-colors duration-300">
+    <div 
+      className="min-h-screen relative flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat transition-all duration-500"
+      style={{ 
+        // Imagem atualizada conforme solicitação: Imagem TEA (Quebra-cabeça colorido em forma de coração)
+        backgroundImage: "url('https://bmcnews.com.br/wp-content/uploads/2024/08/Imagem-TEA.jpg')" 
+      }}
+    >
+      {/* Overlay Escuro com Desfoque suave para garantir leitura do texto sem esconder a imagem */}
+      <div className="absolute inset-0 bg-blue-900/30 backdrop-blur-[2px] z-0"></div>
+
       <button 
              onClick={toggleTheme} 
-             className="absolute top-6 right-6 p-2 rounded-full bg-white dark:bg-gray-800 shadow-md text-gray-600 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+             className="absolute top-6 right-6 p-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-md text-white hover:bg-white/20 transition-colors z-20"
              title="Alternar Tema"
       >
              {themeMode === 'light' ? <Moon size={20} /> : <Sun size={20} />}
       </button>
 
-      <div className="max-w-md w-full">
+      <div className="max-w-md w-full relative z-10">
          <div className="text-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="inline-flex p-4 bg-teal-600 rounded-2xl shadow-lg mb-4">
-              <Activity className="text-white w-10 h-10" />
-            </div>
-            <h1 className="text-4xl font-bold text-slate-800 dark:text-white mb-2">TeraDoc</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-lg">Sistema de Gestão Terapêutica</p>
+            <img 
+              src="https://static.vecteezy.com/system/resources/previews/021/437/132/non_2x/world-autism-awareness-day-ribbon-free-png.png" 
+              alt="Logo TeraDoc" 
+              className="w-24 h-24 mb-4 mx-auto object-contain drop-shadow-lg"
+            />
+            <h1 className="text-4xl font-bold text-white mb-2 drop-shadow-md">TeraDoc</h1>
+            <p className="text-teal-100 text-lg font-medium drop-shadow-sm">Sistema de Gestão Terapêutica</p>
          </div>
 
-         <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl border border-white/50 dark:border-gray-700 backdrop-blur-sm transition-colors duration-300 animate-in fade-in slide-in-from-bottom-8 duration-700">
+         <div className="bg-white/95 dark:bg-gray-800/95 p-8 rounded-2xl shadow-2xl border border-white/50 dark:border-gray-700 backdrop-blur-md transition-colors duration-300 animate-in fade-in slide-in-from-bottom-8 duration-700">
             <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-6 text-center">
                 {isRegistering ? 'Crie sua Conta' : 'Acesse sua Conta'}
             </h2>
@@ -70,7 +81,7 @@ const LoginScreen = () => {
                         <input 
                           type="text" 
                           placeholder="Seu Nome"
-                          className="w-full pl-10 p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                          className={`w-full pl-10 p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                           value={name}
                           onChange={(e) => setName(e.target.value)}
                           disabled={isLoading}
@@ -86,7 +97,7 @@ const LoginScreen = () => {
                     <input 
                       type="email" 
                       placeholder="exemplo@teradoc.com"
-                      className="w-full pl-10 p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                      className={`w-full pl-10 p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       disabled={isLoading}
@@ -101,7 +112,7 @@ const LoginScreen = () => {
                     <input 
                       type="password" 
                       placeholder="••••••••"
-                      className="w-full pl-10 p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                      className={`w-full pl-10 p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       disabled={isLoading}
@@ -120,7 +131,14 @@ const LoginScreen = () => {
                  disabled={isLoading}
                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                >
-                 {isLoading ? <Loader2 className="animate-spin" /> : <>{isRegistering ? 'Cadastrar' : 'Entrar'} <ArrowRight size={18} /></>}
+                 {isLoading ? (
+                    <>
+                        <Loader2 className="animate-spin" size={20} />
+                        <span>Processando...</span>
+                    </>
+                 ) : (
+                    <>{isRegistering ? 'Cadastrar' : 'Entrar'} <ArrowRight size={18} /></>
+                 )}
                </button>
             </form>
 
@@ -130,6 +148,7 @@ const LoginScreen = () => {
                     <button 
                         onClick={() => { setIsRegistering(!isRegistering); setError(''); }} 
                         className="ml-2 font-bold text-teal-600 dark:text-teal-400 hover:underline"
+                        disabled={isLoading}
                     >
                         {isRegistering ? 'Fazer Login' : 'Criar Conta'}
                     </button>
@@ -137,8 +156,8 @@ const LoginScreen = () => {
             </div>
          </div>
          
-         <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-6">
-           &copy; 2024 TeraDoc - Todos os direitos reservados.
+         <p className="text-center text-white/60 text-sm mt-6 font-medium">
+           &copy; 2026 TeraDoc - Todos os direitos reservados.
          </p>
       </div>
     </div>
@@ -156,12 +175,11 @@ const MainLayout = () => {
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 shadow-sm transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
           <div className="flex items-center gap-3">
-             <div className={`p-2 rounded-lg ${
-               currentUser.role === 'ADMIN' ? 'bg-slate-800 dark:bg-slate-700' : 
-               currentUser.role === 'THERAPIST' ? 'bg-teal-600 dark:bg-teal-700' : 'bg-indigo-600 dark:bg-indigo-700'
-             }`}>
-               <Activity className="text-white w-5 h-5" />
-             </div>
+             <img 
+               src="https://static.vecteezy.com/system/resources/previews/021/437/132/non_2x/world-autism-awareness-day-ribbon-free-png.png" 
+               alt="Logo" 
+               className="w-10 h-10 object-contain"
+             />
              <div>
                <h1 className="font-bold text-lg text-gray-800 dark:text-white leading-tight">TeraDoc</h1>
                <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-400">

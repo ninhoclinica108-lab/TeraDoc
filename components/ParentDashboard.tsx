@@ -256,9 +256,11 @@ export const ParentDashboard = () => {
       <aside className="w-full md:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-6 flex flex-col shrink-0 transition-colors duration-300">
         <div className="px-6 mb-8">
            <div className="flex items-center gap-2 mb-1">
-             <div className="bg-indigo-600 p-1.5 rounded-lg">
-               <FileText className="text-white w-5 h-5" />
-             </div>
+             <img 
+               src="https://static.vecteezy.com/system/resources/previews/021/437/132/non_2x/world-autism-awareness-day-ribbon-free-png.png" 
+               alt="Logo" 
+               className="w-10 h-10 object-contain"
+             />
              <span className="font-bold text-lg text-slate-800 dark:text-white">TeraDoc</span>
            </div>
            <p className="text-xs text-gray-400 pl-9">Relatórios Terapêuticos</p>

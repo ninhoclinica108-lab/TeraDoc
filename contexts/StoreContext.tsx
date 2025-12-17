@@ -10,6 +10,8 @@ interface StoreContextType extends AppState {
   toggleTheme: () => void;
   addPatient: (patient: Omit<Patient, 'id'>) => Promise<void>;
   addUser: (user: Omit<User, 'id'>) => Promise<void>;
+  updateUser: (id: string, data: Partial<User>) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
   createRequest: (data: Partial<ReportRequest>) => Promise<void>;
   assignTherapist: (requestId: string, therapistId: string) => Promise<void>;
   saveReportDraft: (requestId: string, content: string) => Promise<void>;
@@ -141,6 +143,29 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
       setUsers(prev => [...prev, newU]);
     } catch(e) { console.error(e); alert('Erro ao adicionar usuário'); }
     setIsLoading(false);
+  };
+
+  const updateUser = async (id: string, data: Partial<User>) => {
+    setIsLoading(true);
+    try {
+      const updated = await api.users.update(id, data);
+      if (updated) {
+          setUsers(prev => prev.map(u => u.id === id ? updated : u));
+          if (currentUser && currentUser.id === id) setCurrentUser(updated);
+      }
+    } catch(e) { console.error(e); alert('Erro ao atualizar usuário'); }
+    setIsLoading(false);
+  };
+
+  const deleteUser = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este usuário? Todas as informações vinculadas serão perdidas.')) {
+        setIsLoading(true);
+        const success = await api.users.delete(id);
+        if (success) {
+            setUsers(prev => prev.filter(u => u.id !== id));
+        }
+        setIsLoading(false);
+    }
   };
 
   const addSpecialty = async (name: string) => {
@@ -308,7 +333,7 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
   return (
     <StoreContext.Provider value={{
       currentUser, users, patients, requests, specialties, themeMode, isLoading,
-      login, register, logout, toggleTheme, addPatient, addUser, createRequest, assignTherapist, saveReportDraft, 
+      login, register, logout, toggleTheme, addPatient, addUser, updateUser, deleteUser, createRequest, assignTherapist, saveReportDraft, 
       submitDraft, approveContent, uploadPdf, adminApplyStoredSignature, signReport, approveFinal, requestRevision, deleteRequest,
       updateUserSignature, getUserById, getPatientById,
       addSpecialty, updateSpecialty, deleteSpecialty

@@ -67,6 +67,28 @@ export const api = {
       }
       return inserted as User;
     },
+    update: async (id: string, data: Partial<User>): Promise<User | null> => {
+      const { data: updated, error } = await supabase
+        .from('users')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+          console.error("Update User Error:", error);
+          return null;
+      }
+      return updated as User;
+    },
+    delete: async (id: string): Promise<boolean> => {
+      const { error } = await supabase.from('users').delete().eq('id', id);
+      if (error) {
+          console.error("Delete User Error:", error);
+          return false;
+      }
+      return true;
+    },
     updateSignature: async (userId: string, signatureUrl: string): Promise<User | null> => {
       const { data, error } = await supabase
         .from('users')

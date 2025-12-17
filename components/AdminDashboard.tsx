@@ -27,10 +27,11 @@ import {
   PieChart as PieChartIcon,
   PenTool,
   Printer,
-  Stamp
+  Stamp,
+  Filter
 } from 'lucide-react';
 import { generatePDF } from '../services/utils';
-import { Role } from '../types';
+import { Role, User as UserType } from '../types';
 import { 
   BarChart, 
   Bar, 
@@ -60,14 +61,19 @@ const AVAILABLE_PERMISSIONS = [
 ];
 
 export const AdminDashboard = () => {
-  const { requests, users, specialties, addUser, assignTherapist, getPatientById, getUserById, approveContent, uploadPdf, adminApplyStoredSignature, approveFinal, requestRevision, deleteRequest, addSpecialty, updateSpecialty, deleteSpecialty, updateUserSignature } = useStore();
+  const { requests, users, specialties, addUser, updateUser, deleteUser, assignTherapist, getPatientById, getUserById, approveContent, uploadPdf, adminApplyStoredSignature, approveFinal, requestRevision, deleteRequest, addSpecialty, updateSpecialty, deleteSpecialty, updateUserSignature } = useStore();
   
   // View State
   const [currentView, setCurrentView] = useState<AdminView>('DASHBOARD');
 
-  // Filter State (Requests)
-  const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'ACTION'>('ALL');
+  // Filter State (Requests) - Changed to string to support specific statuses
+  const [filter, setFilter] = useState<string>('ALL');
   
+  // User Management State
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | Role>('ALL');
+  const [editingUser, setEditingUser] = useState<UserType | null>(null);
+
   // Modals State
   const [assignModalReq, setAssignModalReq] = useState<string | null>(null);
   const [reviewContentModalReq, setReviewContentModalReq] = useState<string | null>(null);
@@ -76,9 +82,9 @@ export const AdminDashboard = () => {
   const [selectedTherapist, setSelectedTherapist] = useState<string>('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   
-  // Access Control Modal State (Generic Users)
+  // Access Control / User Modal State
   const [showUserModal, setShowUserModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'PARENT' as Role });
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'PARENT' as Role });
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
 
   // Therapist Registration Modal State
@@ -94,9 +100,14 @@ export const AdminDashboard = () => {
 
   const filteredRequests = requests.filter(r => {
     if (filter === 'ALL') return true;
-    if (filter === 'PENDING') return r.status === 'PENDING';
     if (filter === 'ACTION') return actionStatuses.includes(r.status);
-    return true;
+    return r.status === filter;
+  });
+
+  const filteredUsers = users.filter(u => {
+      const matchesSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase());
+      const matchesRole = userRoleFilter === 'ALL' || u.role === userRoleFilter;
+      return matchesSearch && matchesRole;
   });
 
   // --- CHART DATA PREPARATION ---
@@ -185,20 +196,50 @@ export const AdminDashboard = () => {
     }
   };
   
-  // Generic User Creation
-  const handleCreateUser = (e: React.FormEvent) => {
+  // Generic User Creation/Edition
+  const handleSaveUser = (e: React.FormEvent) => {
       e.preventDefault();
-      addUser({
-          name: newUser.name,
-          email: newUser.email,
-          password: newUser.password,
-          role: newUser.role,
-          permissions: selectedPermissions
-      });
+      
+      if (editingUser) {
+          updateUser(editingUser.id, {
+              name: userForm.name,
+              email: userForm.email,
+              role: userForm.role,
+              permissions: selectedPermissions,
+              ...(userForm.password ? { password: userForm.password } : {})
+          });
+          alert('Usuário atualizado com sucesso!');
+      } else {
+          addUser({
+              name: userForm.name,
+              email: userForm.email,
+              password: userForm.password,
+              role: userForm.role,
+              permissions: selectedPermissions
+          });
+          alert('Usuário criado com sucesso!');
+      }
+      
       setShowUserModal(false);
-      setNewUser({ name: '', email: '', password: '', role: 'PARENT' });
+      resetUserForm();
+  };
+  
+  const handleEditUser = (user: UserType) => {
+      setEditingUser(user);
+      setUserForm({
+          name: user.name,
+          email: user.email,
+          password: '', // Não preencher senha por segurança
+          role: user.role
+      });
+      setSelectedPermissions(user.permissions || []);
+      setShowUserModal(true);
+  };
+  
+  const resetUserForm = () => {
+      setEditingUser(null);
+      setUserForm({ name: '', email: '', password: '', role: 'PARENT' });
       setSelectedPermissions([]);
-      alert('Usuário criado com sucesso!');
   };
 
   // Therapist Specific Creation
@@ -293,9 +334,11 @@ export const AdminDashboard = () => {
       <aside className="w-full md:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-6 flex flex-col shrink-0 transition-colors duration-300">
         <div className="px-6 mb-8">
            <div className="flex items-center gap-2 mb-1">
-             <div className="bg-slate-800 dark:bg-slate-700 p-1.5 rounded-lg">
-               <ShieldCheck className="text-white w-5 h-5" />
-             </div>
+             <img 
+               src="https://static.vecteezy.com/system/resources/previews/021/437/132/non_2x/world-autism-awareness-day-ribbon-free-png.png" 
+               alt="Logo" 
+               className="w-10 h-10 object-contain"
+             />
              <span className="font-bold text-lg text-slate-800 dark:text-white">Admin</span>
            </div>
            <p className="text-xs text-gray-400 pl-9">Gestão Completa</p>
@@ -446,12 +489,27 @@ export const AdminDashboard = () => {
                 <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
                   <FileText className="text-blue-600 dark:text-blue-400" /> Gerenciar Solicitações
                 </h1>
-                <div className="flex gap-2 bg-white dark:bg-gray-800 p-1 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-                  {['ALL', 'PENDING', 'ACTION'].map((f) => (
-                    <button key={f} onClick={() => setFilter(f as any)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${filter === f ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-                      {f === 'ALL' ? 'Todos' : f === 'PENDING' ? 'Pendentes' : 'Ações'}
-                    </button>
-                  ))}
+                
+                {/* Advanced Status Filter */}
+                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+                  <Filter size={18} className="text-gray-500 dark:text-gray-400" />
+                  <select 
+                    value={filter} 
+                    onChange={(e) => setFilter(e.target.value)} 
+                    className="bg-transparent border-none text-sm font-medium text-gray-700 dark:text-gray-300 focus:ring-0 cursor-pointer outline-none min-w-[200px]"
+                  >
+                    <option value="ALL">Todas as Solicitações</option>
+                    <option value="ACTION">⚠️ Requer Minha Atenção</option>
+                    <option disabled>──────────</option>
+                    <option value="PENDING">Pendentes (Novo)</option>
+                    <option value="ASSIGNED">Encaminhados</option>
+                    <option value="WAITING_APPROVAL">Aguardando Revisão de Texto</option>
+                    <option value="NEEDS_REVISION">Em Revisão (Devolvido)</option>
+                    <option value="WAITING_PDF_UPLOAD">Aguardando Upload PDF</option>
+                    <option value="WAITING_SIGNATURE">Aguardando Assinatura</option>
+                    <option value="SIGNED_BY_THERAPIST">Assinado (Verificação Final)</option>
+                    <option value="APPROVED_BY_ADMIN">Concluído (Pronto)</option>
+                  </select>
                 </div>
              </div>
 
@@ -468,7 +526,13 @@ export const AdminDashboard = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                      {filteredRequests.map(req => {
+                      {filteredRequests.length === 0 ? (
+                        <tr>
+                            <td colSpan={5} className="p-8 text-center text-gray-500 dark:text-gray-400">
+                                Nenhuma solicitação encontrada com o filtro selecionado.
+                            </td>
+                        </tr>
+                      ) : filteredRequests.map(req => {
                         const patient = getPatientById(req.patientId);
                         return (
                           <tr key={req.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
@@ -489,6 +553,7 @@ export const AdminDashboard = () => {
                                 <button onClick={() => setReviewPdfModalReq(req.id)} className="bg-green-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1 mx-auto hover:bg-green-700 transition-colors"><FileCheck size={12}/> Aprovar Final</button>
                               )}
                               {(req.status === 'WAITING_SIGNATURE' || req.status === 'ASSIGNED') && <span className="text-xs text-gray-400 italic">Aguardando Terapeuta...</span>}
+                              {(req.status === 'APPROVED_BY_ADMIN') && <span className="text-xs text-green-600 dark:text-green-400 font-medium flex justify-center items-center gap-1"><CheckCircle size={12} /> Finalizado</span>}
                             </td>
                             <td className="p-4 text-right">
                               <button onClick={() => deleteRequest(req.id)} className="text-gray-300 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 p-2"><Trash2 size={16} /></button>
@@ -615,19 +680,131 @@ export const AdminDashboard = () => {
             </div>
         )}
 
-        {/* VIEW: ACCESS CONTROL */}
+        {/* VIEW: USERS (Full CRUD) */}
+        {currentView === 'USERS' && (
+           <div className="max-w-7xl mx-auto animate-in fade-in duration-300">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                  <div>
+                      <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                          <Users className="text-blue-600 dark:text-blue-400" /> Gerenciar Usuários
+                      </h1>
+                      <p className="text-gray-500 dark:text-gray-400 mt-1">Controle total de contas e acessos.</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                      <div className="relative">
+                          <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                          <input 
+                            type="text" 
+                            placeholder="Buscar por nome ou e-mail..." 
+                            className="w-full sm:w-64 pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={userSearch}
+                            onChange={(e) => setUserSearch(e.target.value)}
+                          />
+                      </div>
+                      <select 
+                        className="p-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={userRoleFilter}
+                        onChange={(e) => setUserRoleFilter(e.target.value as any)}
+                      >
+                          <option value="ALL">Todos os Perfis</option>
+                          <option value="ADMIN">Administradores</option>
+                          <option value="THERAPIST">Terapeutas</option>
+                          <option value="PARENT">Responsáveis</option>
+                      </select>
+                      <button onClick={() => { resetUserForm(); setShowUserModal(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 shadow-sm font-medium">
+                          <UserPlus size={18} /> Novo Usuário
+                      </button>
+                  </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                          <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-600 dark:text-gray-300 text-sm border-b border-gray-200 dark:border-gray-700">
+                              <tr>
+                                  <th className="p-4 font-medium">Usuário</th>
+                                  <th className="p-4 font-medium">Função</th>
+                                  <th className="p-4 font-medium">Acessos</th>
+                                  <th className="p-4 font-medium text-right">Ações</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                              {filteredUsers.length === 0 ? (
+                                  <tr>
+                                      <td colSpan={4} className="p-8 text-center text-gray-500 dark:text-gray-400">
+                                          Nenhum usuário encontrado.
+                                      </td>
+                                  </tr>
+                              ) : filteredUsers.map(u => (
+                                  <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                      <td className="p-4">
+                                          <div className="flex items-center gap-3">
+                                              <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-300 font-bold">
+                                                  {u.avatar ? <img src={u.avatar} className="w-full h-full rounded-full object-cover"/> : u.name.charAt(0)}
+                                              </div>
+                                              <div>
+                                                  <div className="font-bold text-slate-800 dark:text-white">{u.name}</div>
+                                                  <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
+                                              </div>
+                                          </div>
+                                      </td>
+                                      <td className="p-4">
+                                          <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase 
+                                              ${u.role === 'ADMIN' ? 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300' : 
+                                                u.role === 'THERAPIST' ? 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300' : 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300'}`}>
+                                              {u.role === 'PARENT' ? 'Responsável' : u.role === 'THERAPIST' ? 'Terapeuta' : 'Admin'}
+                                          </span>
+                                      </td>
+                                      <td className="p-4">
+                                          <div className="flex flex-wrap gap-1 max-w-xs">
+                                              {u.permissions?.slice(0, 3).map(p => (
+                                                  <span key={p} className="bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-1.5 py-0.5 rounded text-[10px] text-gray-600 dark:text-gray-300 truncate max-w-[100px]">
+                                                      {AVAILABLE_PERMISSIONS.find(ap => ap.id === p)?.label || p}
+                                                  </span>
+                                              ))}
+                                              {(u.permissions?.length || 0) > 3 && (
+                                                  <span className="text-[10px] text-gray-400 px-1 py-0.5">+{(u.permissions?.length || 0) - 3}</span>
+                                              )}
+                                              {(!u.permissions || u.permissions.length === 0) && <span className="text-gray-400 text-xs italic">-</span>}
+                                          </div>
+                                      </td>
+                                      <td className="p-4 text-right">
+                                          <div className="flex items-center justify-end gap-2">
+                                              <button 
+                                                  onClick={() => handleEditUser(u)}
+                                                  className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                                  title="Editar Usuário"
+                                              >
+                                                  <Edit size={16} />
+                                              </button>
+                                              <button 
+                                                  onClick={() => deleteUser(u.id)}
+                                                  className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                  title="Excluir Usuário"
+                                              >
+                                                  <Trash2 size={16} />
+                                              </button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+           </div>
+        )}
+
+        {/* VIEW: ACCESS CONTROL (Simplified to permissions focus, uses same modal) */}
         {currentView === 'ACCESS' && (
             <div className="max-w-6xl mx-auto animate-in fade-in duration-300">
                 <div className="flex justify-between items-center mb-8">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                            <ShieldAlert className="text-blue-600 dark:text-blue-400" /> Gerenciar Tipos de Acessos
+                            <ShieldAlert className="text-blue-600 dark:text-blue-400" /> Controle de Acessos
                         </h1>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">Controle permissões e crie novos usuários no sistema.</p>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">Visão detalhada de permissões por usuário.</p>
                     </div>
-                    <button onClick={() => setShowUserModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 shadow-sm">
-                        <Plus size={18} /> Novo Usuário
-                    </button>
                 </div>
                 
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -635,37 +812,28 @@ export const AdminDashboard = () => {
                         <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 text-sm">
                             <tr>
                                 <th className="p-4 font-medium">Usuário</th>
-                                <th className="p-4 font-medium">Função (Role)</th>
-                                <th className="p-4 font-medium">Permissões Específicas</th>
+                                <th className="p-4 font-medium">Role</th>
+                                <th className="p-4 font-medium">Permissões Detalhadas</th>
                                 <th className="p-4 font-medium text-right">Ação</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {users.map(u => (
                                 <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                    <td className="p-4">
-                                        <div className="font-bold text-slate-800 dark:text-white">{u.name}</div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold uppercase 
-                                            ${u.role === 'ADMIN' ? 'bg-slate-800 dark:bg-slate-700 text-white' : 
-                                              u.role === 'THERAPIST' ? 'bg-teal-600 dark:bg-teal-700 text-white' : 'bg-indigo-600 dark:bg-indigo-700 text-white'}`}>
-                                            {u.role === 'PARENT' ? 'Responsável' : u.role === 'THERAPIST' ? 'Terapeuta' : 'Admin'}
-                                        </span>
-                                    </td>
+                                    <td className="p-4 font-medium text-slate-800 dark:text-white">{u.name}</td>
+                                    <td className="p-4 text-sm text-gray-500 dark:text-gray-400">{u.role}</td>
                                     <td className="p-4">
                                         <div className="flex flex-wrap gap-1">
                                             {u.permissions?.map(p => (
-                                                <span key={p} className="bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-2 py-0.5 rounded text-[10px] text-gray-600 dark:text-gray-300">
+                                                <span key={p} className="bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 px-2 py-0.5 rounded text-[10px] text-blue-700 dark:text-blue-300">
                                                     {AVAILABLE_PERMISSIONS.find(ap => ap.id === p)?.label || p}
                                                 </span>
                                             ))}
-                                            {(!u.permissions || u.permissions.length === 0) && <span className="text-gray-400 dark:text-gray-500 text-xs italic">Nenhuma permissão extra</span>}
+                                            {(!u.permissions || u.permissions.length === 0) && <span className="text-gray-400 text-xs italic">Sem permissões especiais</span>}
                                         </div>
                                     </td>
                                     <td className="p-4 text-right">
-                                        <button className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium">Editar</button>
+                                        <button onClick={() => handleEditUser(u)} className="text-blue-600 hover:underline text-xs">Gerenciar</button>
                                     </td>
                                 </tr>
                             ))}
@@ -673,15 +841,6 @@ export const AdminDashboard = () => {
                     </table>
                 </div>
             </div>
-        )}
-
-        {/* PLACEHOLDER VIEWS */}
-        {currentView === 'USERS' && (
-           <div className="flex flex-col items-center justify-center h-96 text-gray-400 animate-in fade-in duration-300">
-              <Users size={48} className="mb-4 opacity-20"/>
-              <h2 className="text-xl font-semibold mb-2">Em Desenvolvimento</h2>
-              <p>O módulo de Usuários estará disponível em breve.</p>
-           </div>
         )}
 
       </main>
@@ -813,27 +972,29 @@ export const AdminDashboard = () => {
           </div>
       )}
       
-      {/* 5. CREATE USER MODAL with Permissions & Password */}
+      {/* 5. CREATE/EDIT USER MODAL */}
       {showUserModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm overflow-y-auto">
               <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-2xl p-6 shadow-2xl my-8">
-                  <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Cadastrar Novo Usuário e Acessos</h3>
-                  <form onSubmit={handleCreateUser} className="space-y-6">
+                  <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">
+                      {editingUser ? 'Editar Usuário' : 'Cadastrar Novo Usuário e Acessos'}
+                  </h3>
+                  <form onSubmit={handleSaveUser} className="space-y-6">
                       <div className="grid md:grid-cols-2 gap-4">
                           <div>
                               <label className="block text-sm font-medium mb-1 dark:text-gray-300">Nome Completo</label>
-                              <input type="text" required className="w-full p-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
+                              <input type="text" required className="w-full p-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} />
                           </div>
                           <div>
                               <label className="block text-sm font-medium mb-1 dark:text-gray-300">E-mail</label>
-                              <input type="email" required className="w-full p-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+                              <input type="email" required className="w-full p-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} />
                           </div>
                       </div>
 
                       <div className="grid md:grid-cols-2 gap-4">
                           <div>
                              <label className="block text-sm font-medium mb-1 dark:text-gray-300">Função Principal</label>
-                             <select className="w-full p-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as Role})}>
+                             <select className="w-full p-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white" value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value as Role})}>
                                  <option value="PARENT">Responsável (Pais)</option>
                                  <option value="THERAPIST">Terapeuta</option>
                                  <option value="ADMIN">Administrador</option>
@@ -841,15 +1002,15 @@ export const AdminDashboard = () => {
                           </div>
                           <div>
                               <label className="block text-sm font-medium mb-1 flex items-center gap-1 dark:text-gray-300">
-                                  Senha de Acesso <KeyRound size={14} className="text-gray-400" />
+                                  {editingUser ? 'Nova Senha (Opcional)' : 'Senha de Acesso'} <KeyRound size={14} className="text-gray-400" />
                               </label>
                               <input 
                                   type="password" 
-                                  placeholder="Mínimo 6 caracteres" 
-                                  required 
+                                  placeholder={editingUser ? "Deixe em branco para manter" : "Mínimo 6 caracteres"}
+                                  required={!editingUser}
                                   className="w-full p-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white" 
-                                  value={newUser.password} 
-                                  onChange={e => setNewUser({...newUser, password: e.target.value})} 
+                                  value={userForm.password} 
+                                  onChange={e => setUserForm({...userForm, password: e.target.value})} 
                               />
                           </div>
                       </div>
@@ -860,10 +1021,7 @@ export const AdminDashboard = () => {
                           </label>
                           <div className="grid grid-cols-2 gap-3">
                               {AVAILABLE_PERMISSIONS.map(perm => {
-                                  // Separar visualmente as permissões "administrativas" das de "módulos" se a ID começar com 'acesso_'
-                                  const isModule = perm.id.startsWith('acesso_');
                                   const isSelected = selectedPermissions.includes(perm.id);
-                                  
                                   return (
                                     <label 
                                         key={perm.id} 
@@ -892,8 +1050,10 @@ export const AdminDashboard = () => {
                       </div>
                       
                       <div className="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                          <button type="button" onClick={() => setShowUserModal(false)} className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">Cancelar</button>
-                          <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Criar Usuário</button>
+                          <button type="button" onClick={() => { setShowUserModal(false); resetUserForm(); }} className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">Cancelar</button>
+                          <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                              {editingUser ? 'Salvar Alterações' : 'Criar Usuário'}
+                          </button>
                       </div>
                   </form>
               </div>
