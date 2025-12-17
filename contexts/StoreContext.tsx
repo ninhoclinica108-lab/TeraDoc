@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User, Patient, ReportRequest, AppState, Specialty, ThemeMode } from '../types';
 import { playSound } from '../services/utils';
 import { api } from '../services/api';
+import { supabase } from '../services/supabase';
 
 interface StoreContextType extends AppState {
   login: (email: string, password?: string) => Promise<boolean>;
@@ -19,18 +20,12 @@ interface StoreContextType extends AppState {
   submitDraft: (requestId: string) => Promise<void>; 
   approveContent: (requestId: string) => Promise<void>;
   uploadPdf: (requestId: string, pdfUrl: string, signer: 'THERAPIST' | 'ADMIN') => Promise<void>;
-  adminApplyStoredSignature: (requestId: string) => Promise<void>;
   signReport: (requestId: string) => Promise<void>;
   approveFinal: (requestId: string) => Promise<void>;
   requestRevision: (requestId: string, notes?: string) => Promise<void>;
   deleteRequest: (requestId: string) => Promise<void>;
-  updateUserSignature: (userId: string, signatureUrl: string) => Promise<void>;
   getUserById: (id: string) => User | undefined;
   getPatientById: (id: string) => Patient | undefined;
-  
-  addSpecialty: (name: string) => Promise<void>;
-  updateSpecialty: (id: string, name: string) => Promise<void>;
-  deleteSpecialty: (id: string) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -40,33 +35,50 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [requests, setRequests] = useState<ReportRequest[]>([]);
-  const [specialties, setSpecialties] = useState<Specialty[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem('theme');
     return (saved === 'dark' || saved === 'light') ? saved : 'light';
   });
 
-  const loadData = async () => {
+  const loadAppData = async () => {
     try {
-      const [u, p, r, s] = await Promise.all([
+      const [u, p, r] = await Promise.all([
         api.users.getAll(),
         api.patients.getAll(),
-        api.requests.getAll(),
-        api.specialties.getAll()
+        api.requests.getAll()
       ]);
       setUsers(u);
       setPatients(p);
       setRequests(r);
-      setSpecialties(s);
     } catch (error) {
-      console.error("Failed to load data. The project might be paused or tables are missing.", error);
+      console.error("Erro ao carregar dados", error);
     }
   };
 
   useEffect(() => {
-    setIsLoading(true);
-    loadData().finally(() => setIsLoading(false));
+    // 1. Verificar sessão inicial
+    api.auth.getSessionUser().then(user => {
+      setCurrentUser(user);
+      if (user) loadAppData();
+      setIsLoading(false);
+    });
+
+    // 2. Ouvir mudanças de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        const user = await api.auth.getSessionUser();
+        setCurrentUser(user);
+        loadAppData();
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setUsers([]);
+        setPatients([]);
+        setRequests([]);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -79,113 +91,41 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
   const toggleTheme = () => setThemeMode(prev => prev === 'light' ? 'dark' : 'light');
 
   const login = async (email: string, password?: string) => {
-    setIsLoading(true);
     try {
-      const user = await api.auth.login(email, password);
-      if (user) {
-        setCurrentUser(user);
-        await loadData();
-        return true;
-      }
+      await api.auth.signIn(email, password);
+      return true;
+    } catch (e) {
       return false;
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  /**
-   * REGRA: Registro público pelo site sempre cria conta de PARENT (Responsável).
-   */
   const register = async (name: string, email: string, password?: string) => {
-    setIsLoading(true);
     try {
-      const newUser = await api.users.create({
-        name,
-        email,
-        password,
-        role: 'PARENT', // FORÇADO: Usuários que se cadastram pelo site são sempre Responsáveis
-        permissions: ['criar_solicitacao', 'visualizar_pacientes']
-      });
-      setUsers(prev => [...prev, newUser]);
-      setCurrentUser(newUser);
+      await api.auth.signUp(name, email, password);
       return { success: true };
     } catch (error: any) {
-      console.error("Register error:", error);
-      return { success: false, error: error.message || "Erro desconhecido ao cadastrar." };
-    } finally {
-      setIsLoading(false);
+      return { success: false, error: error.message };
     }
   };
 
-  const logout = () => setCurrentUser(null);
+  const logout = () => api.auth.signOut();
 
   const addPatient = async (data: Omit<Patient, 'id'>) => {
-    setIsLoading(true);
-    try {
-      const newP = await api.patients.create(data);
-      setPatients(prev => [...prev, newP]);
-    } catch (e) {
-      console.error("Failed to add patient", e);
-      alert('Erro ao adicionar paciente. Verifique se o banco de dados está ativo.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /**
-   * REGRA: Apenas administradores logados podem criar usuários via painel (Admin/Therapist).
-   */
-  const addUser = async (data: Omit<User, 'id'>) => {
-    if (currentUser?.role !== 'ADMIN') {
-      alert('Acesso negado: apenas administradores podem criar contas de Terapeutas ou Admins.');
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const newU = await api.users.create(data);
-      setUsers(prev => [...prev, newU]);
-    } catch(e: any) { 
-      alert('Erro ao adicionar usuário: ' + (e.message || 'Erro desconhecido')); 
-    }
-    setIsLoading(false);
-  };
-
-  const updateUser = async (id: string, data: Partial<User>) => {
-    setIsLoading(true);
-    try {
-      const updated = await api.users.update(id, data);
-      if (updated) {
-        setUsers(prev => prev.map(u => u.id === id ? updated : u));
-        if (currentUser?.id === id) setCurrentUser(updated);
-      }
-    } finally { setIsLoading(false); }
-  };
-
-  const deleteUser = async (id: string) => {
-    if (id === currentUser?.id) {
-        alert("Você não pode excluir sua própria conta administrativa.");
-        return;
-    }
-    if (window.confirm("Deseja realmente excluir este usuário?")) {
-        setIsLoading(true);
-        const success = await api.users.delete(id);
-        if (success) setUsers(prev => prev.filter(u => u.id !== id));
-        setIsLoading(false);
-    }
+    if (!currentUser) return;
+    const newP = await api.patients.create({ ...data, parentId: currentUser.id });
+    setPatients(prev => [...prev, newP]);
   };
 
   const createRequest = async (data: Partial<ReportRequest>) => {
     if (!currentUser) return;
-    setIsLoading(true);
-    try {
-      const newReq = await api.requests.create({ ...data, parentId: currentUser.id });
-      setRequests(prev => [newReq, ...prev]);
-      if (currentUser.role === 'PARENT') setTimeout(() => playSound('NEW_REQUEST'), 500);
-    } finally {
-      setIsLoading(false);
-    }
+    const newReq = await api.requests.create({ ...data, parentId: currentUser.id });
+    setRequests(prev => [newReq, ...prev]);
+    if (currentUser.role === 'PARENT') playSound('NEW_REQUEST');
   };
 
+  // Funções de Workflow seguem a mesma lógica anterior mas sem o setIsLoading interno 
+  // (idealmente usaríamos um estado global de loading ou feedback visual por botão)
+  
   const assignTherapist = async (requestId: string, therapistId: string) => {
     const updated = await api.requests.update(requestId, { status: 'ASSIGNED', therapistId });
     if (updated) {
@@ -201,10 +141,7 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
 
   const submitDraft = async (requestId: string) => {
     const updated = await api.requests.update(requestId, { status: 'WAITING_APPROVAL' });
-    if (updated) {
-      setRequests(prev => prev.map(r => r.id === requestId ? updated : r));
-      playSound('MESSAGE');
-    }
+    if (updated) setRequests(prev => prev.map(r => r.id === requestId ? updated : r));
   };
 
   const approveContent = async (requestId: string) => {
@@ -217,11 +154,6 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
       ? { pdfUrl, status: 'APPROVED_BY_ADMIN', isSigned: true, completionDate: new Date().toISOString() }
       : { pdfUrl, status: 'WAITING_SIGNATURE' };
     const updated = await api.requests.update(requestId, updateData);
-    if (updated) setRequests(prev => prev.map(r => r.id === requestId ? updated : r));
-  };
-
-  const adminApplyStoredSignature = async (requestId: string) => {
-    const updated = await api.requests.update(requestId, { status: 'APPROVED_BY_ADMIN', isSigned: true, completionDate: new Date().toISOString() });
     if (updated) setRequests(prev => prev.map(r => r.id === requestId ? updated : r));
   };
 
@@ -245,24 +177,19 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
     if (success) setRequests(prev => prev.filter(r => r.id !== requestId));
   };
 
-  const addSpecialty = async (name: string) => {
-    const newS = await api.specialties.create(name);
-    setSpecialties(prev => [...prev, newS]);
+  const addUser = async (data: Omit<User, 'id'>) => {
+    const { data: inserted } = await supabase.from('users').insert(data).select().single();
+    if (inserted) setUsers(prev => [...prev, inserted as User]);
   };
 
-  const updateSpecialty = async (id: string, name: string) => {
-    const updated = await api.specialties.update(id, name);
-    if (updated) setSpecialties(prev => prev.map(s => s.id === id ? updated : s));
+  const updateUser = async (id: string, data: Partial<User>) => {
+    const updated = await api.users.update(id, data);
+    if (updated) setUsers(prev => prev.map(u => u.id === id ? updated : u));
   };
 
-  const deleteSpecialty = async (id: string) => {
-    const success = await api.specialties.delete(id);
-    if (success) setSpecialties(prev => prev.filter(s => s.id !== id));
-  };
-
-  const updateUserSignature = async (userId: string, signatureUrl: string) => {
-    const updated = await api.users.updateSignature(userId, signatureUrl);
-    if (updated) setUsers(prev => prev.map(u => u.id === userId ? updated : u));
+  const deleteUser = async (id: string) => {
+    const success = await api.users.delete(id);
+    if (success) setUsers(prev => prev.filter(u => u.id !== id));
   };
 
   const getUserById = (id: string) => users.find(u => u.id === id);
@@ -270,10 +197,10 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
 
   return (
     <StoreContext.Provider value={{
-      currentUser, users, patients, requests, specialties, themeMode, isLoading,
+      currentUser, users, patients, requests, specialties: [], themeMode, isLoading,
       login, register, logout, toggleTheme, addPatient, addUser, updateUser, deleteUser, createRequest, assignTherapist, saveReportDraft, 
-      submitDraft, approveContent, uploadPdf, adminApplyStoredSignature, signReport, approveFinal, requestRevision, deleteRequest,
-      updateUserSignature, getUserById, getPatientById, addSpecialty, updateSpecialty, deleteSpecialty
+      submitDraft, approveContent, uploadPdf, signReport, approveFinal, requestRevision, deleteRequest,
+      getUserById, getPatientById
     }}>
       {children}
     </StoreContext.Provider>
