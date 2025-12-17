@@ -1,0 +1,5 @@
+{
+  "name": "TeraDoc - Sistema de Relatórios Terapêuticos",
+  "description": "Plataforma completa para gestão de solicitações de relatórios terapêuticos com dashboards para Pais, Administradores e Terapeutas, incluindo assinatura digital simulada e alertas sonoros.",
+  "requestFramePermissions": []
+}

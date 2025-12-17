@@ -1,0 +1,196 @@
+import React, { useState } from 'react';
+import { HashRouter } from 'react-router-dom';
+import { StoreProvider, useStore } from './contexts/StoreContext';
+import { ParentDashboard } from './components/ParentDashboard';
+import { AdminDashboard } from './components/AdminDashboard';
+import { TherapistDashboard } from './components/TherapistDashboard';
+import { LogOut, Activity, Moon, Sun, Mail, Lock, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+
+const LoginScreen = () => {
+  const { login, themeMode, toggleTheme, isLoading } = useStore();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!email || !password) {
+      setError('Por favor, preencha todos os campos.');
+      return;
+    }
+
+    const success = await login(email, password);
+    if (!success) {
+      setError('E-mail ou senha incorretos. Verifique suas credenciais.');
+    }
+  };
+
+  // Helper for Demo Buttons
+  const setDemoCredentials = (e: string, p: string) => {
+      setEmail(e);
+      setPassword(p);
+      setError('');
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-200 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4 transition-colors duration-300">
+      <button 
+             onClick={toggleTheme} 
+             className="absolute top-6 right-6 p-2 rounded-full bg-white dark:bg-gray-800 shadow-md text-gray-600 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+             title="Alternar Tema"
+      >
+             {themeMode === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+      </button>
+
+      <div className="max-w-md w-full">
+         <div className="text-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="inline-flex p-4 bg-teal-600 rounded-2xl shadow-lg mb-4">
+              <Activity className="text-white w-10 h-10" />
+            </div>
+            <h1 className="text-4xl font-bold text-slate-800 dark:text-white mb-2">TeraDoc</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-lg">Sistema de Gestão Terapêutica</p>
+         </div>
+
+         <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl border border-white/50 dark:border-gray-700 backdrop-blur-sm transition-colors duration-300 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-6 text-center">Acesse sua Conta</h2>
+            
+            <form onSubmit={handleLogin} className="space-y-5">
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">E-mail Corporativo ou Pessoal</label>
+                 <div className="relative">
+                    <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
+                    <input 
+                      type="email" 
+                      placeholder="exemplo@teradoc.com"
+                      className="w-full pl-10 p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={isLoading}
+                    />
+                 </div>
+               </div>
+
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Senha</label>
+                 <div className="relative">
+                    <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
+                    <input 
+                      type="password" 
+                      placeholder="••••••••"
+                      className="w-full pl-10 p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isLoading}
+                    />
+                 </div>
+               </div>
+
+               {error && (
+                 <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 text-sm flex items-center gap-2">
+                    <AlertCircle size={16} /> {error}
+                 </div>
+               )}
+
+               <button 
+                 type="submit" 
+                 disabled={isLoading}
+                 className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+               >
+                 {isLoading ? <Loader2 className="animate-spin" /> : <>Entrar <ArrowRight size={18} /></>}
+               </button>
+            </form>
+
+            <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
+               <p className="text-xs text-center text-gray-400 mb-4 uppercase tracking-wider font-semibold">Acesso Rápido (Demonstração)</p>
+               <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => setDemoCredentials('mae@teste.com', '123')} className="p-2 text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors">
+                     Responsável
+                  </button>
+                  <button onClick={() => setDemoCredentials('helena@teste.com', '123')} className="p-2 text-xs bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors">
+                     Terapeuta
+                  </button>
+                  <button onClick={() => setDemoCredentials('admin@teste.com', '123')} className="p-2 text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                     Admin
+                  </button>
+               </div>
+            </div>
+         </div>
+         
+         <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-6">
+           &copy; 2024 TeraDoc - Todos os direitos reservados.
+         </p>
+      </div>
+    </div>
+  );
+};
+
+const MainLayout = () => {
+  const { currentUser, logout, themeMode, toggleTheme } = useStore();
+
+  if (!currentUser) return <LoginScreen />;
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900 font-sans transition-colors duration-300">
+      {/* Top Navigation */}
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 shadow-sm transition-colors duration-300">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+             <div className={`p-2 rounded-lg ${
+               currentUser.role === 'ADMIN' ? 'bg-slate-800 dark:bg-slate-700' : 
+               currentUser.role === 'THERAPIST' ? 'bg-teal-600 dark:bg-teal-700' : 'bg-indigo-600 dark:bg-indigo-700'
+             }`}>
+               <Activity className="text-white w-5 h-5" />
+             </div>
+             <div>
+               <h1 className="font-bold text-lg text-gray-800 dark:text-white leading-tight">TeraDoc</h1>
+               <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-400">
+                 Painel {currentUser.role === 'PARENT' ? 'dos Pais' : currentUser.role === 'ADMIN' ? 'Administrativo' : 'do Terapeuta'}
+               </p>
+             </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <button 
+               onClick={toggleTheme} 
+               className="p-2 text-gray-400 hover:text-yellow-500 dark:hover:text-yellow-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+            >
+               {themeMode === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+            </button>
+            <div className="hidden sm:block text-right">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{currentUser.name}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 lowercase">{currentUser.email}</p>
+            </div>
+            <button 
+              onClick={logout}
+              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
+              title="Sair"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Content */}
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+        {currentUser.role === 'PARENT' && <ParentDashboard />}
+        {currentUser.role === 'ADMIN' && <AdminDashboard />}
+        {currentUser.role === 'THERAPIST' && <TherapistDashboard />}
+      </main>
+    </div>
+  );
+};
+
+const App = () => {
+  return (
+    <StoreProvider>
+      <HashRouter>
+        <MainLayout />
+      </HashRouter>
+    </StoreProvider>
+  );
+};
+
+export default App;
