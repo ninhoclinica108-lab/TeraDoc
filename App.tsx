@@ -153,7 +153,7 @@ const LoginScreen = () => {
                       <button onClick={() => setDemoCredentials('helena@teste.com', '123')} className="p-2 text-xs bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors">
                          Terapeuta
                       </button>
-                      <button onClick={() => setDemoCredentials('admin@teste.com', '123')} className="p-2 text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                      <button onClick={() => setDemoCredentials('ninhoclinica108@gmail.com', 'Ninho@2025')} className="p-2 text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                          Admin
                       </button>
                    </div>

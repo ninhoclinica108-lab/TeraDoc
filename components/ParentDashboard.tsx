@@ -205,7 +205,7 @@ export const ParentDashboard = () => {
     const therapist = req.therapistId ? getUserById(req.therapistId) : {
         id: 'admin_fallback',
         name: 'Diretoria Clínica / Admin',
-        email: 'admin@teradoc.com',
+        email: 'ninhoclinica108@gmail.com', // Updated to new admin email
         role: 'ADMIN'
     } as any;
     
