@@ -5,6 +5,7 @@ import { api } from '../services/api';
 
 interface StoreContextType extends AppState {
   login: (email: string, password?: string) => Promise<boolean>;
+  register: (name: string, email: string, password?: string) => Promise<boolean>; // Novo método
   logout: () => void;
   toggleTheme: () => void;
   addPatient: (patient: Omit<Patient, 'id'>) => Promise<void>;
@@ -96,6 +97,31 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
             return true;
         }
         return false;
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  const register = async (name: string, email: string, password?: string) => {
+    setIsLoading(true);
+    try {
+        // Verifica se usuário já existe
+        const existing = users.find(u => u.email === email);
+        if (existing) {
+            return false;
+        }
+
+        const newUser = await api.users.create({
+            name,
+            email,
+            password,
+            role: 'PARENT', // Auto-registro é sempre Responsável
+            permissions: ['criar_solicitacao', 'visualizar_pacientes']
+        });
+        
+        setUsers(prev => [...prev, newUser]);
+        setCurrentUser(newUser); // Loga automaticamente
+        return true;
     } finally {
         setIsLoading(false);
     }
@@ -288,7 +314,7 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
   return (
     <StoreContext.Provider value={{
       currentUser, users, patients, requests, specialties, themeMode, isLoading,
-      login, logout, toggleTheme, addPatient, addUser, createRequest, assignTherapist, saveReportDraft, 
+      login, register, logout, toggleTheme, addPatient, addUser, createRequest, assignTherapist, saveReportDraft, 
       submitDraft, approveContent, uploadPdf, adminApplyStoredSignature, signReport, approveFinal, requestRevision, deleteRequest,
       updateUserSignature, getUserById, getPatientById,
       addSpecialty, updateSpecialty, deleteSpecialty

@@ -4,31 +4,40 @@ import { StoreProvider, useStore } from './contexts/StoreContext';
 import { ParentDashboard } from './components/ParentDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
 import { TherapistDashboard } from './components/TherapistDashboard';
-import { LogOut, Activity, Moon, Sun, Mail, Lock, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { LogOut, Activity, Moon, Sun, Mail, Lock, AlertCircle, ArrowRight, Loader2, User as UserIcon } from 'lucide-react';
 
 const LoginScreen = () => {
-  const { login, themeMode, toggleTheme, isLoading } = useStore();
+  const { login, register, themeMode, toggleTheme, isLoading } = useStore();
+  const [isRegistering, setIsRegistering] = useState(false);
+  
+  // Form State
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     
-    if (!email || !password) {
-      setError('Por favor, preencha todos os campos.');
+    if (!email || !password || (isRegistering && !name)) {
+      setError('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
 
-    const success = await login(email, password);
-    if (!success) {
-      setError('E-mail ou senha incorretos. Verifique suas credenciais.');
+    let success;
+    if (isRegistering) {
+        success = await register(name, email, password);
+        if (!success) setError('Este e-mail já está cadastrado.');
+    } else {
+        success = await login(email, password);
+        if (!success) setError('E-mail ou senha incorretos. Verifique suas credenciais.');
     }
   };
 
   // Helper for Demo Buttons
   const setDemoCredentials = (e: string, p: string) => {
+      setIsRegistering(false);
       setEmail(e);
       setPassword(p);
       setError('');
@@ -54,11 +63,31 @@ const LoginScreen = () => {
          </div>
 
          <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl border border-white/50 dark:border-gray-700 backdrop-blur-sm transition-colors duration-300 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-6 text-center">Acesse sua Conta</h2>
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-6 text-center">
+                {isRegistering ? 'Crie sua Conta' : 'Acesse sua Conta'}
+            </h2>
             
-            <form onSubmit={handleLogin} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5">
+               
+               {isRegistering && (
+                   <div className="animate-in fade-in slide-in-from-top-2">
+                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome Completo</label>
+                     <div className="relative">
+                        <UserIcon className="absolute left-3 top-3 text-gray-400" size={18} />
+                        <input 
+                          type="text" 
+                          placeholder="Seu Nome"
+                          className="w-full pl-10 p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          disabled={isLoading}
+                        />
+                     </div>
+                   </div>
+               )}
+
                <div>
-                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">E-mail Corporativo ou Pessoal</label>
+                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">E-mail</label>
                  <div className="relative">
                     <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
                     <input 
@@ -98,24 +127,38 @@ const LoginScreen = () => {
                  disabled={isLoading}
                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                >
-                 {isLoading ? <Loader2 className="animate-spin" /> : <>Entrar <ArrowRight size={18} /></>}
+                 {isLoading ? <Loader2 className="animate-spin" /> : <>{isRegistering ? 'Cadastrar' : 'Entrar'} <ArrowRight size={18} /></>}
                </button>
             </form>
 
-            <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
-               <p className="text-xs text-center text-gray-400 mb-4 uppercase tracking-wider font-semibold">Acesso Rápido (Demonstração)</p>
-               <div className="grid grid-cols-3 gap-2">
-                  <button onClick={() => setDemoCredentials('mae@teste.com', '123')} className="p-2 text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors">
-                     Responsável
-                  </button>
-                  <button onClick={() => setDemoCredentials('helena@teste.com', '123')} className="p-2 text-xs bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors">
-                     Terapeuta
-                  </button>
-                  <button onClick={() => setDemoCredentials('admin@teste.com', '123')} className="p-2 text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-                     Admin
-                  </button>
-               </div>
+            <div className="mt-6 text-center">
+                <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    {isRegistering ? 'Já tem uma conta?' : 'Não tem uma conta?'}
+                    <button 
+                        onClick={() => { setIsRegistering(!isRegistering); setError(''); }} 
+                        className="ml-2 font-bold text-teal-600 dark:text-teal-400 hover:underline"
+                    >
+                        {isRegistering ? 'Fazer Login' : 'Criar Conta'}
+                    </button>
+                </p>
             </div>
+
+            {!isRegistering && (
+                <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
+                   <p className="text-xs text-center text-gray-400 mb-4 uppercase tracking-wider font-semibold">Acesso Rápido (Demonstração)</p>
+                   <div className="grid grid-cols-3 gap-2">
+                      <button onClick={() => setDemoCredentials('mae@teste.com', '123')} className="p-2 text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors">
+                         Responsável
+                      </button>
+                      <button onClick={() => setDemoCredentials('helena@teste.com', '123')} className="p-2 text-xs bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors">
+                         Terapeuta
+                      </button>
+                      <button onClick={() => setDemoCredentials('admin@teste.com', '123')} className="p-2 text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                         Admin
+                      </button>
+                   </div>
+                </div>
+            )}
          </div>
          
          <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-6">
