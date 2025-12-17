@@ -68,7 +68,7 @@ const LoginScreen = () => {
 
          <div className="bg-white/95 dark:bg-gray-800/95 p-8 rounded-2xl shadow-2xl border border-white/50 dark:border-gray-700 backdrop-blur-md transition-colors duration-300 animate-in fade-in slide-in-from-bottom-8 duration-700">
             <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-6 text-center">
-                {isRegistering ? 'Crie sua Conta' : 'Acesse sua Conta'}
+                {isRegistering ? 'Cadastro de Responsável' : 'Acesse sua Conta'}
             </h2>
             
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -150,7 +150,7 @@ const LoginScreen = () => {
                         className="ml-2 font-bold text-teal-600 dark:text-teal-400 hover:underline"
                         disabled={isLoading}
                     >
-                        {isRegistering ? 'Fazer Login' : 'Criar Conta'}
+                        {isRegistering ? 'Fazer Login' : 'Criar Conta de Responsável'}
                     </button>
                 </p>
             </div>

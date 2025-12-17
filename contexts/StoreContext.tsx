@@ -103,6 +103,8 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
     }
   };
 
+  // --- REGRA DE NEGÓCIO: Registro Público ---
+  // Qualquer pessoa criando conta pelo site (fora do painel admin) é automaticamente 'PARENT'
   const register = async (name: string, email: string, password?: string) => {
     setIsLoading(true);
     try {
@@ -110,7 +112,7 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
             name,
             email,
             password,
-            role: 'PARENT', 
+            role: 'PARENT', // FORÇADO: Usuários públicos são sempre Responsáveis
             permissions: ['criar_solicitacao', 'visualizar_pacientes']
         });
         
@@ -136,7 +138,14 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
     setIsLoading(false);
   };
 
+  // --- REGRA DE NEGÓCIO: Criação Administrativa ---
+  // Apenas o ADMIN logado pode criar outros Admins ou Terapeutas
   const addUser = async (data: Omit<User, 'id'>) => {
+    if (currentUser?.role !== 'ADMIN') {
+        alert('Ação Negada: Apenas administradores podem criar contas de Terapeutas ou outros Administradores.');
+        return;
+    }
+
     setIsLoading(true);
     try {
       const newU = await api.users.create(data);
