@@ -26,6 +26,12 @@ interface StoreContextType extends AppState {
   deleteRequest: (requestId: string) => Promise<void>;
   getUserById: (id: string) => User | undefined;
   getPatientById: (id: string) => Patient | undefined;
+  // Fix: Added missing method definitions used in AdminDashboard and TherapistDashboard
+  adminApplyStoredSignature: (requestId: string) => Promise<void>;
+  addSpecialty: (specialty: Omit<Specialty, 'id'>) => Promise<void>;
+  updateSpecialty: (id: string, data: Partial<Specialty>) => Promise<void>;
+  deleteSpecialty: (id: string) => Promise<void>;
+  updateUserSignature: (userId: string, signatureUrl: string) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -35,6 +41,7 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [requests, setRequests] = useState<ReportRequest[]>([]);
+  const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem('theme');
@@ -43,38 +50,41 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
 
   const loadAppData = async () => {
     try {
-      const [u, p, r] = await Promise.all([
+      const [u, p, r, s] = await Promise.all([
         api.users.getAll(),
         api.patients.getAll(),
-        api.requests.getAll()
+        api.requests.getAll(),
+        api.specialties.getAll()
       ]);
       setUsers(u);
       setPatients(p);
       setRequests(r);
+      setSpecialties(s || []);
     } catch (error) {
       console.error("Erro ao carregar dados", error);
     }
   };
 
-  useEffect(() => {
-    // 1. Verificar sessão inicial
-    api.auth.getSessionUser().then(user => {
-      setCurrentUser(user);
-      if (user) loadAppData();
-      setIsLoading(false);
-    });
+  const refreshCurrentUser = async () => {
+    const user = await api.auth.getSessionUser();
+    setCurrentUser(user);
+    if (user) loadAppData();
+    setIsLoading(false);
+  };
 
-    // 2. Ouvir mudanças de autenticação
+  useEffect(() => {
+    refreshCurrentUser();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        const user = await api.auth.getSessionUser();
-        setCurrentUser(user);
-        loadAppData();
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        refreshCurrentUser();
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setUsers([]);
         setPatients([]);
         setRequests([]);
+        setSpecialties([]);
+        setIsLoading(false);
       }
     });
 
@@ -92,23 +102,41 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
 
   const login = async (email: string, password?: string) => {
     try {
-      await api.auth.signIn(email, password);
+      setIsLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password: password || ''
+      });
+      if (error) throw error;
       return true;
     } catch (e) {
+      console.error("Login error:", e);
+      setIsLoading(false);
       return false;
     }
   };
 
   const register = async (name: string, email: string, password?: string) => {
     try {
-      await api.auth.signUp(name, email, password);
+      setIsLoading(true);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: password || '',
+        options: { data: { name, role: 'PARENT' } }
+      });
+      if (error) throw error;
+      setIsLoading(false);
       return { success: true };
     } catch (error: any) {
+      setIsLoading(false);
       return { success: false, error: error.message };
     }
   };
 
-  const logout = () => api.auth.signOut();
+  const logout = async () => {
+    await api.auth.signOut();
+    setCurrentUser(null);
+  };
 
   const addPatient = async (data: Omit<Patient, 'id'>) => {
     if (!currentUser) return;
@@ -123,9 +151,6 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
     if (currentUser.role === 'PARENT') playSound('NEW_REQUEST');
   };
 
-  // Funções de Workflow seguem a mesma lógica anterior mas sem o setIsLoading interno 
-  // (idealmente usaríamos um estado global de loading ou feedback visual por botão)
-  
   const assignTherapist = async (requestId: string, therapistId: string) => {
     const updated = await api.requests.update(requestId, { status: 'ASSIGNED', therapistId });
     if (updated) {
@@ -178,8 +203,8 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   const addUser = async (data: Omit<User, 'id'>) => {
-    const { data: inserted } = await supabase.from('users').insert(data).select().single();
-    if (inserted) setUsers(prev => [...prev, inserted as User]);
+    const inserted = await api.users.create(data);
+    if (inserted) setUsers(prev => [...prev, inserted]);
   };
 
   const updateUser = async (id: string, data: Partial<User>) => {
@@ -195,12 +220,41 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
   const getUserById = (id: string) => users.find(u => u.id === id);
   const getPatientById = (id: string) => patients.find(p => p.id === id);
 
+  // Implement missing methods for dashboard operations
+  const adminApplyStoredSignature = async (requestId: string) => {
+    const updated = await api.requests.update(requestId, { 
+      status: 'APPROVED_BY_ADMIN', 
+      isSigned: true, 
+      completionDate: new Date().toISOString() 
+    });
+    if (updated) setRequests(prev => prev.map(r => r.id === requestId ? updated : r));
+  };
+
+  const addSpecialty = async (data: Omit<Specialty, 'id'>) => {
+    const newS = await api.specialties.create(data);
+    if (newS) setSpecialties(prev => [...prev, newS]);
+  };
+
+  const updateSpecialty = async (id: string, data: Partial<Specialty>) => {
+    const updated = await api.specialties.update(id, data);
+    if (updated) setSpecialties(prev => prev.map(s => s.id === id ? updated : s));
+  };
+
+  const deleteSpecialty = async (id: string) => {
+    const success = await api.specialties.delete(id);
+    if (success) setSpecialties(prev => prev.filter(s => s.id !== id));
+  };
+
+  const updateUserSignature = async (userId: string, signatureUrl: string) => {
+    await updateUser(userId, { signatureUrl });
+  };
+
   return (
     <StoreContext.Provider value={{
-      currentUser, users, patients, requests, specialties: [], themeMode, isLoading,
+      currentUser, users, patients, requests, specialties, themeMode, isLoading,
       login, register, logout, toggleTheme, addPatient, addUser, updateUser, deleteUser, createRequest, assignTherapist, saveReportDraft, 
       submitDraft, approveContent, uploadPdf, signReport, approveFinal, requestRevision, deleteRequest,
-      getUserById, getPatientById
+      getUserById, getPatientById, adminApplyStoredSignature, addSpecialty, updateSpecialty, deleteSpecialty, updateUserSignature
     }}>
       {children}
     </StoreContext.Provider>

@@ -56,8 +56,6 @@ export const api = {
       return (data as User[]) || [];
     },
     create: async (data: Omit<User, 'id'>): Promise<User> => {
-       // Nota: Para criar outros admins/terapeutas, idealmente usa-se uma Edge Function ou Admin Auth
-       // Por simplicidade, mantemos a lógica de inserção direta se o RLS permitir
        const { data: inserted, error } = await supabase.from('users').insert(data).select().single();
        handleSupabaseError(error);
        return inserted as User;
@@ -103,9 +101,32 @@ export const api = {
       handleSupabaseError(error);
       return data as ReportRequest;
     },
-    // Fix: Added missing delete method for requests to support StoreContext operations
     delete: async (id: string): Promise<boolean> => {
       const { error } = await supabase.from('requests').delete().eq('id', id);
+      handleSupabaseError(error);
+      return !error;
+    }
+  },
+
+  // Added specialties CRUD to fix missing methods in AdminDashboard
+  specialties: {
+    getAll: async (): Promise<Specialty[]> => {
+      const { data, error } = await supabase.from('specialties').select('*');
+      handleSupabaseError(error);
+      return (data as Specialty[]) || [];
+    },
+    create: async (data: Omit<Specialty, 'id'>): Promise<Specialty> => {
+      const { data: inserted, error } = await supabase.from('specialties').insert(data).select().single();
+      handleSupabaseError(error);
+      return inserted as Specialty;
+    },
+    update: async (id: string, data: Partial<Specialty>): Promise<Specialty | null> => {
+      const { data: updated, error } = await supabase.from('specialties').update(data).eq('id', id).select().single();
+      handleSupabaseError(error);
+      return updated as Specialty;
+    },
+    delete: async (id: string): Promise<boolean> => {
+      const { error } = await supabase.from('specialties').delete().eq('id', id);
       handleSupabaseError(error);
       return !error;
     }
