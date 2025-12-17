@@ -28,7 +28,8 @@ import {
   PenTool,
   Printer,
   Stamp,
-  Filter
+  Filter,
+  AlertOctagon
 } from 'lucide-react';
 import { generatePDF } from '../services/utils';
 import { Role, User as UserType } from '../types';
@@ -50,14 +51,14 @@ type AdminView = 'DASHBOARD' | 'REQUESTS' | 'THERAPISTS' | 'SPECIALTIES' | 'USER
 
 // Updated permissions based on the request image
 const AVAILABLE_PERMISSIONS = [
-  { id: 'acesso_relatorios', label: 'Relatórios' },
-  { id: 'acesso_declaracoes', label: 'Declarações' },
-  { id: 'acesso_falta_justificativa', label: 'Falta Justificativa' },
-  { id: 'acesso_atualizacao_laudos', label: 'Atualização de Laudos' },
-  { id: 'acesso_desligamento', label: 'Desligamento/Suspensão' },
-  { id: 'acesso_acessorio', label: 'Solicitação de Acessório' },
-  { id: 'gerenciar_usuarios', label: 'Gerenciar Usuários (Admin)' },
-  { id: 'configuracoes_sistema', label: 'Configurações do Sistema' }
+  { id: 'acesso_relatorios', label: 'Relatórios', description: 'Permite visualizar e criar relatórios.' },
+  { id: 'acesso_declaracoes', label: 'Declarações', description: 'Permite emitir declarações padrão.' },
+  { id: 'acesso_falta_justificativa', label: 'Falta Justificativa', description: 'Gestão de justificativas de falta.' },
+  { id: 'acesso_atualizacao_laudos', label: 'Atualização de Laudos', description: 'Upload e visualização de novos laudos.' },
+  { id: 'acesso_desligamento', label: 'Desligamento/Suspensão', description: 'Processos de desligamento de pacientes.' },
+  { id: 'acesso_acessorio', label: 'Solicitação de Acessório', description: 'Gestão de crachás e cordões.' },
+  { id: 'gerenciar_usuarios', label: 'Gerenciar Usuários (Admin)', description: 'Acesso total ao cadastro de usuários.' },
+  { id: 'configuracoes_sistema', label: 'Configurações do Sistema', description: 'Acesso a configurações globais.' }
 ];
 
 export const AdminDashboard = () => {
@@ -86,6 +87,9 @@ export const AdminDashboard = () => {
   const [showUserModal, setShowUserModal] = useState(false);
   const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'PARENT' as Role });
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  
+  // Access Management Specific State
+  const [permissionToEdit, setPermissionToEdit] = useState<string | null>(null);
 
   // Therapist Registration Modal State
   const [showTherapistModal, setShowTherapistModal] = useState(false);
@@ -94,6 +98,15 @@ export const AdminDashboard = () => {
   // Specialties Management State
   const [showSpecialtyModal, setShowSpecialtyModal] = useState(false);
   const [specialtyForm, setSpecialtyForm] = useState({ id: '', name: '' });
+
+  // Delete Confirmation State
+  const [deleteConfig, setDeleteConfig] = useState<{
+      show: boolean;
+      type: 'USER' | 'REQUEST' | 'SPECIALTY' | null;
+      id: string | null;
+      title: string;
+      message: string;
+  }>({ show: false, type: null, id: null, title: '', message: '' });
 
   const therapists = users.filter(u => u.role === 'THERAPIST');
   const actionStatuses = ['PENDING', 'WAITING_APPROVAL', 'WAITING_PDF_UPLOAD', 'SIGNED_BY_THERAPIST'];
@@ -111,14 +124,10 @@ export const AdminDashboard = () => {
   });
 
   // --- CHART DATA PREPARATION ---
-  
-  // 1. Bar Chart: Requests by Category (Last 30 Days)
   const barChartData = useMemo(() => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
     const counts: Record<string, number> = {};
-    
     requests.forEach(req => {
       const reqDate = new Date(req.requestDate);
       if (reqDate >= thirtyDaysAgo) {
@@ -126,43 +135,26 @@ export const AdminDashboard = () => {
         counts[categoryName] = (counts[categoryName] || 0) + 1;
       }
     });
-
-    return Object.keys(counts).map(key => ({
-      name: key,
-      solicitacoes: counts[key]
-    }));
+    return Object.keys(counts).map(key => ({ name: key, solicitacoes: counts[key] }));
   }, [requests]);
 
-  // 2. Pie Chart: Status Distribution (Active Requests)
   const pieChartData = useMemo(() => {
     const activeStatuses = ['PENDING', 'ASSIGNED', 'WAITING_APPROVAL', 'WAITING_PDF_UPLOAD', 'WAITING_SIGNATURE', 'SIGNED_BY_THERAPIST', 'NEEDS_REVISION'];
     const counts: Record<string, number> = {};
-
     requests.forEach(req => {
       if (activeStatuses.includes(req.status)) {
         counts[req.status] = (counts[req.status] || 0) + 1;
       }
     });
-
-    return Object.keys(counts).map(key => ({
-      name: key.replace(/_/g, ' '),
-      value: counts[key]
-    }));
+    return Object.keys(counts).map(key => ({ name: key.replace(/_/g, ' '), value: counts[key] }));
   }, [requests]);
 
-  // Colors for Pie Chart
   const STATUS_COLORS: Record<string, string> = {
-    'PENDING': '#EAB308',            // Yellow-500
-    'ASSIGNED': '#3B82F6',           // Blue-500
-    'WAITING_APPROVAL': '#F97316',   // Orange-500
-    'WAITING_PDF_UPLOAD': '#A855F7', // Purple-500
-    'WAITING_SIGNATURE': '#14B8A6',  // Teal-500
-    'SIGNED_BY_THERAPIST': '#6366F1',// Indigo-500
-    'NEEDS_REVISION': '#EF4444'      // Red-500
+    'PENDING': '#EAB308', 'ASSIGNED': '#3B82F6', 'WAITING_APPROVAL': '#F97316', 'WAITING_PDF_UPLOAD': '#A855F7',
+    'WAITING_SIGNATURE': '#14B8A6', 'SIGNED_BY_THERAPIST': '#6366F1', 'NEEDS_REVISION': '#EF4444'
   };
 
   const getStatusColor = (statusName: string) => {
-    // Reverse map from display name to key or approximate
     const key = statusName.replace(/ /g, '_');
     return STATUS_COLORS[key] || '#94A3B8';
   };
@@ -175,22 +167,14 @@ export const AdminDashboard = () => {
     }
   };
 
-  // Lógica atualizada de Upload / Geração de PDF e Decisão de Assinatura
   const handleUploadOrGenerate = (type: 'THERAPIST' | 'ADMIN' | 'STORED') => {
     if (uploadModalReq) {
-        
       if (type === 'STORED') {
-          // Admin usa a assinatura do banco de dados do terapeuta
           adminApplyStoredSignature(uploadModalReq);
       } else {
-          // Se não houver arquivo real, usamos uma URL simulada (geração automática)
-          const fakeUrl = uploadFile 
-            ? URL.createObjectURL(uploadFile) 
-            : `relatorio_gerado_sistema_${uploadModalReq}.pdf`;
-          
+          const fakeUrl = uploadFile ? URL.createObjectURL(uploadFile) : `relatorio_gerado_sistema_${uploadModalReq}.pdf`;
           uploadPdf(uploadModalReq, fakeUrl, type);
       }
-      
       setUploadModalReq(null);
       setUploadFile(null);
     }
@@ -199,39 +183,21 @@ export const AdminDashboard = () => {
   // Generic User Creation/Edition
   const handleSaveUser = (e: React.FormEvent) => {
       e.preventDefault();
-      
       if (editingUser) {
           updateUser(editingUser.id, {
-              name: userForm.name,
-              email: userForm.email,
-              role: userForm.role,
-              permissions: selectedPermissions,
+              name: userForm.name, email: userForm.email, role: userForm.role, permissions: selectedPermissions,
               ...(userForm.password ? { password: userForm.password } : {})
           });
-          alert('Usuário atualizado com sucesso!');
       } else {
-          addUser({
-              name: userForm.name,
-              email: userForm.email,
-              password: userForm.password,
-              role: userForm.role,
-              permissions: selectedPermissions
-          });
-          alert('Usuário criado com sucesso!');
+          addUser({ name: userForm.name, email: userForm.email, password: userForm.password, role: userForm.role, permissions: selectedPermissions });
       }
-      
       setShowUserModal(false);
       resetUserForm();
   };
   
   const handleEditUser = (user: UserType) => {
       setEditingUser(user);
-      setUserForm({
-          name: user.name,
-          email: user.email,
-          password: '', // Não preencher senha por segurança
-          role: user.role
-      });
+      setUserForm({ name: user.name, email: user.email, password: '', role: user.role });
       setSelectedPermissions(user.permissions || []);
       setShowUserModal(true);
   };
@@ -245,57 +211,73 @@ export const AdminDashboard = () => {
   // Therapist Specific Creation
   const handleCreateTherapist = (e: React.FormEvent) => {
       e.preventDefault();
-      addUser({
-          name: newTherapist.name,
-          email: newTherapist.email,
-          password: newTherapist.password,
-          specialty: newTherapist.specialty,
-          role: 'THERAPIST',
-          permissions: ['assinar_documentos', 'criar_rascunho', 'acesso_relatorios'] // Permissões padrão para terapeutas
-      });
+      addUser({ name: newTherapist.name, email: newTherapist.email, password: newTherapist.password, specialty: newTherapist.specialty, role: 'THERAPIST', permissions: ['assinar_documentos', 'criar_rascunho', 'acesso_relatorios'] });
       setShowTherapistModal(false);
       setNewTherapist({ name: '', email: '', password: '', specialty: '' });
-      alert('Terapeuta cadastrado com sucesso!');
   };
 
-  // Update Signature Logic for Therapist Card
   const handleUpdateTherapistSignature = (userId: string, file: File) => {
       const fakeUrl = URL.createObjectURL(file);
       updateUserSignature(userId, fakeUrl);
-      alert('Assinatura salva no banco de dados!');
   };
 
   // Specialty Logic
   const handleOpenSpecialtyModal = (spec?: { id: string, name: string }) => {
-      if (spec) {
-          setSpecialtyForm(spec);
-      } else {
-          setSpecialtyForm({ id: '', name: '' });
-      }
+      if (spec) setSpecialtyForm(spec);
+      else setSpecialtyForm({ id: '', name: '' });
       setShowSpecialtyModal(true);
   };
 
   const handleSaveSpecialty = (e: React.FormEvent) => {
       e.preventDefault();
-      if (specialtyForm.id) {
-          updateSpecialty(specialtyForm.id, specialtyForm.name);
-      } else {
-          addSpecialty(specialtyForm.name);
-      }
+      if (specialtyForm.id) updateSpecialty(specialtyForm.id, specialtyForm.name);
+      else addSpecialty(specialtyForm.name);
       setShowSpecialtyModal(false);
       setSpecialtyForm({ id: '', name: '' });
   };
 
-  const handleDeleteSpecialty = (id: string) => {
-      if (window.confirm('Tem certeza que deseja excluir esta especialidade?')) {
-          deleteSpecialty(id);
+  // --- DELETE LOGIC WITH MODAL ---
+  const promptDelete = (type: 'USER' | 'REQUEST' | 'SPECIALTY', id: string) => {
+      let title = '';
+      let message = '';
+      
+      switch(type) {
+          case 'USER': 
+            title = 'Excluir Usuário'; 
+            message = 'Tem certeza que deseja excluir este usuário? Todos os dados vinculados serão perdidos permanentemente.';
+            break;
+          case 'REQUEST': 
+            title = 'Excluir Solicitação'; 
+            message = 'Tem certeza que deseja excluir esta solicitação? Esta ação não pode ser desfeita.';
+            break;
+          case 'SPECIALTY': 
+            title = 'Excluir Especialidade'; 
+            message = 'Tem certeza que deseja remover esta especialidade do sistema?';
+            break;
       }
+      
+      setDeleteConfig({ show: true, type, id, title, message });
+  };
+
+  const handleConfirmDelete = () => {
+      if (deleteConfig.type === 'USER' && deleteConfig.id) deleteUser(deleteConfig.id);
+      if (deleteConfig.type === 'REQUEST' && deleteConfig.id) deleteRequest(deleteConfig.id);
+      if (deleteConfig.type === 'SPECIALTY' && deleteConfig.id) deleteSpecialty(deleteConfig.id);
+      
+      setDeleteConfig({ ...deleteConfig, show: false, id: null });
   };
 
   const togglePermission = (permId: string) => {
-      setSelectedPermissions(prev => 
-          prev.includes(permId) ? prev.filter(p => p !== permId) : [...prev, permId]
-      );
+      setSelectedPermissions(prev => prev.includes(permId) ? prev.filter(p => p !== permId) : [...prev, permId]);
+  };
+
+  // New: Toggle permission for a specific user directly from the Access view
+  const toggleUserPermissionFromAccessView = async (user: UserType, permId: string) => {
+      const currentPerms = user.permissions || [];
+      const hasPerm = currentPerms.includes(permId);
+      const newPerms = hasPerm ? currentPerms.filter(p => p !== permId) : [...currentPerms, permId];
+      
+      await updateUser(user.id, { permissions: newPerms });
   };
 
   const getStatusBadge = (status: string) => {
@@ -312,7 +294,6 @@ export const AdminDashboard = () => {
     return <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold ${styles[status]}`}>{status.replace(/_/g, ' ')}</span>;
   };
 
-  // Sidebar Item Component
   const SidebarItem = ({ view, icon: Icon, label }: { view: AdminView, icon: any, label: string }) => (
     <button 
       onClick={() => setCurrentView(view)}
@@ -330,7 +311,7 @@ export const AdminDashboard = () => {
   return (
     <div className="flex flex-col md:flex-row min-h-[calc(100vh-100px)] bg-gray-50 dark:bg-gray-900 -m-4 sm:-m-6 lg:-m-8 transition-colors duration-300">
       
-      {/* Sidebar Navigation */}
+      {/* Sidebar Navigation - Reorganized */}
       <aside className="w-full md:w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-6 flex flex-col shrink-0 transition-colors duration-300">
         <div className="px-6 mb-8">
            <div className="flex items-center gap-2 mb-1">
@@ -347,12 +328,12 @@ export const AdminDashboard = () => {
         <div className="flex-1 pr-4">
           <p className="px-6 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Navegação</p>
           <nav>
-            <SidebarItem view="DASHBOARD" icon={LayoutDashboard} label="Dashboard" />
+            <SidebarItem view="DASHBOARD" icon={LayoutDashboard} label="Visão Geral" />
             <SidebarItem view="REQUESTS" icon={FileText} label="Solicitações" />
             <SidebarItem view="THERAPISTS" icon={Stethoscope} label="Terapeutas" />
+            <SidebarItem view="USERS" icon={Users} label="Usuários" />
             <SidebarItem view="ACCESS" icon={ShieldAlert} label="Acessos" />
             <SidebarItem view="SPECIALTIES" icon={Briefcase} label="Especialidades" />
-            <SidebarItem view="USERS" icon={Users} label="Usuários" />
           </nav>
         </div>
       </aside>
@@ -398,25 +379,9 @@ export const AdminDashboard = () => {
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={barChartData} margin={{ top: 5, right: 30, left: -20, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                                    <XAxis 
-                                        dataKey="name" 
-                                        stroke="#94A3B8" 
-                                        fontSize={10} 
-                                        tickLine={false} 
-                                        axisLine={false} 
-                                    />
-                                    <YAxis 
-                                        stroke="#94A3B8" 
-                                        fontSize={12} 
-                                        tickLine={false} 
-                                        axisLine={false} 
-                                        allowDecimals={false}
-                                    />
-                                    <Tooltip 
-                                        cursor={{ fill: 'transparent' }}
-                                        contentStyle={{ backgroundColor: '#1E293B', color: '#fff', borderRadius: '8px', border: 'none' }}
-                                        itemStyle={{ color: '#fff' }}
-                                    />
+                                    <XAxis dataKey="name" stroke="#94A3B8" fontSize={10} tickLine={false} axisLine={false} />
+                                    <YAxis stroke="#94A3B8" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: '#1E293B', color: '#fff', borderRadius: '8px', border: 'none' }} itemStyle={{ color: '#fff' }} />
                                     <Bar dataKey="solicitacoes" fill="#6366F1" radius={[4, 4, 0, 0]} barSize={40} />
                                 </BarChart>
                             </ResponsiveContainer>
@@ -442,31 +407,13 @@ export const AdminDashboard = () => {
                         {pieChartData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
-                                    <Pie
-                                        data={pieChartData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={60}
-                                        outerRadius={80}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                        labelLine={false}
-                                        label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                                    >
+                                    <Pie data={pieChartData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" labelLine={false} label={({ percent }) => `${(percent * 100).toFixed(0)}%`}>
                                         {pieChartData.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={getStatusColor(entry.name)} />
                                         ))}
                                     </Pie>
-                                    <Tooltip 
-                                         contentStyle={{ backgroundColor: '#1E293B', color: '#fff', borderRadius: '8px', border: 'none' }}
-                                         itemStyle={{ color: '#fff' }}
-                                    />
-                                    <Legend 
-                                        verticalAlign="bottom" 
-                                        height={36} 
-                                        iconType="circle"
-                                        formatter={(value) => <span className="text-xs text-gray-600 dark:text-gray-300 ml-1">{value}</span>}
-                                    />
+                                    <Tooltip contentStyle={{ backgroundColor: '#1E293B', color: '#fff', borderRadius: '8px', border: 'none' }} itemStyle={{ color: '#fff' }} />
+                                    <Legend verticalAlign="bottom" height={36} iconType="circle" formatter={(value) => <span className="text-xs text-gray-600 dark:text-gray-300 ml-1">{value}</span>} />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (
@@ -477,7 +424,6 @@ export const AdminDashboard = () => {
                         )}
                     </div>
                 </div>
-
               </div>
           </div>
         )}
@@ -556,7 +502,7 @@ export const AdminDashboard = () => {
                               {(req.status === 'APPROVED_BY_ADMIN') && <span className="text-xs text-green-600 dark:text-green-400 font-medium flex justify-center items-center gap-1"><CheckCircle size={12} /> Finalizado</span>}
                             </td>
                             <td className="p-4 text-right">
-                              <button onClick={() => deleteRequest(req.id)} className="text-gray-300 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 p-2"><Trash2 size={16} /></button>
+                              <button onClick={() => promptDelete('REQUEST', req.id)} className="text-gray-300 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 p-2"><Trash2 size={16} /></button>
                             </td>
                           </tr>
                         );
@@ -667,7 +613,7 @@ export const AdminDashboard = () => {
                                     <Edit size={16} />
                                 </button>
                                 <button 
-                                    onClick={() => handleDeleteSpecialty(spec.id)}
+                                    onClick={() => promptDelete('SPECIALTY', spec.id)}
                                     className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" 
                                     title="Excluir"
                                 >
@@ -778,7 +724,7 @@ export const AdminDashboard = () => {
                                                   <Edit size={16} />
                                               </button>
                                               <button 
-                                                  onClick={() => deleteUser(u.id)}
+                                                  onClick={() => promptDelete('USER', u.id)}
                                                   className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                                   title="Excluir Usuário"
                                               >
@@ -795,50 +741,62 @@ export const AdminDashboard = () => {
            </div>
         )}
 
-        {/* VIEW: ACCESS CONTROL (Simplified to permissions focus, uses same modal) */}
+        {/* VIEW: ACCESS CONTROL (Reformulated) */}
         {currentView === 'ACCESS' && (
             <div className="max-w-6xl mx-auto animate-in fade-in duration-300">
                 <div className="flex justify-between items-center mb-8">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                            <ShieldAlert className="text-blue-600 dark:text-blue-400" /> Controle de Acessos
+                            <ShieldAlert className="text-blue-600 dark:text-blue-400" /> Controle de Permissões
                         </h1>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">Visão detalhada de permissões por usuário.</p>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">Gerencie quem tem acesso a cada módulo do sistema.</p>
                     </div>
                 </div>
                 
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 text-sm">
-                            <tr>
-                                <th className="p-4 font-medium">Usuário</th>
-                                <th className="p-4 font-medium">Role</th>
-                                <th className="p-4 font-medium">Permissões Detalhadas</th>
-                                <th className="p-4 font-medium text-right">Ação</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                            {users.map(u => (
-                                <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                    <td className="p-4 font-medium text-slate-800 dark:text-white">{u.name}</td>
-                                    <td className="p-4 text-sm text-gray-500 dark:text-gray-400">{u.role}</td>
-                                    <td className="p-4">
-                                        <div className="flex flex-wrap gap-1">
-                                            {u.permissions?.map(p => (
-                                                <span key={p} className="bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 px-2 py-0.5 rounded text-[10px] text-blue-700 dark:text-blue-300">
-                                                    {AVAILABLE_PERMISSIONS.find(ap => ap.id === p)?.label || p}
-                                                </span>
-                                            ))}
-                                            {(!u.permissions || u.permissions.length === 0) && <span className="text-gray-400 text-xs italic">Sem permissões especiais</span>}
-                                        </div>
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        <button onClick={() => handleEditUser(u)} className="text-blue-600 hover:underline text-xs">Gerenciar</button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {AVAILABLE_PERMISSIONS.map(permission => {
+                        const usersWithPermission = users.filter(u => u.permissions?.includes(permission.id));
+                        
+                        return (
+                            <div key={permission.id} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all flex flex-col h-full group">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg text-blue-600 dark:text-blue-400">
+                                        <ShieldCheck size={24} />
+                                    </div>
+                                    <div className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-bold text-gray-600 dark:text-gray-300">
+                                        {usersWithPermission.length} Usuários
+                                    </div>
+                                </div>
+                                <h3 className="font-bold text-lg text-gray-800 dark:text-white mb-1">{permission.label}</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 flex-1">{permission.description || 'Sem descrição.'}</p>
+                                
+                                <div className="space-y-2 mb-4">
+                                    <div className="flex -space-x-2 overflow-hidden">
+                                        {usersWithPermission.slice(0, 5).map(u => (
+                                            <div key={u.id} className="inline-block h-8 w-8 rounded-full ring-2 ring-white dark:ring-gray-800 bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300" title={u.name}>
+                                                {u.name.charAt(0)}
+                                            </div>
+                                        ))}
+                                        {usersWithPermission.length > 5 && (
+                                            <div className="inline-block h-8 w-8 rounded-full ring-2 ring-white dark:ring-gray-800 bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs text-gray-500 font-medium">
+                                                +{usersWithPermission.length - 5}
+                                            </div>
+                                        )}
+                                        {usersWithPermission.length === 0 && (
+                                            <span className="text-xs text-gray-400 italic pl-1">Nenhum usuário</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <button 
+                                    onClick={() => setPermissionToEdit(permission.id)}
+                                    className="w-full mt-auto py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Edit size={14} /> Editar Acessos
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         )}
@@ -1160,6 +1118,111 @@ export const AdminDashboard = () => {
               </div>
           </div>
       )}
+
+      {/* 8. DELETE CONFIRMATION MODAL */}
+      {deleteConfig.show && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+              <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+                  <div className="flex flex-col items-center text-center">
+                      <div className="w-16 h-16 bg-red-100 dark:bg-red-900/40 rounded-full flex items-center justify-center mb-4 text-red-600 dark:text-red-400">
+                          <AlertTriangle size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">{deleteConfig.title}</h3>
+                      <p className="text-gray-500 dark:text-gray-400 mb-6">{deleteConfig.message}</p>
+                      
+                      <div className="flex gap-3 w-full">
+                          <button 
+                              onClick={() => setDeleteConfig({ ...deleteConfig, show: false })}
+                              className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                          >
+                              Cancelar
+                          </button>
+                          <button 
+                              onClick={handleConfirmDelete}
+                              className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                          >
+                              <Trash2 size={18} /> Confirmar Exclusão
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* 9. PERMISSION EDITOR MODAL (Access View) */}
+      {permissionToEdit && (() => {
+          const perm = AVAILABLE_PERMISSIONS.find(p => p.id === permissionToEdit);
+          return (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-2xl p-6 shadow-2xl flex flex-col max-h-[85vh]">
+                      <div className="flex justify-between items-start mb-6">
+                          <div>
+                              <h3 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                  <ShieldCheck className="text-blue-600 dark:text-blue-400" /> Gerenciar Acesso: {perm?.label}
+                              </h3>
+                              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{perm?.description}</p>
+                          </div>
+                          <button onClick={() => setPermissionToEdit(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                              <X size={24} />
+                          </button>
+                      </div>
+
+                      <div className="flex-1 overflow-y-auto pr-2">
+                          <table className="w-full text-left">
+                              <thead className="bg-gray-50 dark:bg-gray-900/50 sticky top-0 text-gray-600 dark:text-gray-300 text-sm border-b border-gray-200 dark:border-gray-700">
+                                  <tr>
+                                      <th className="p-3 font-medium">Usuário</th>
+                                      <th className="p-3 font-medium">Perfil</th>
+                                      <th className="p-3 font-medium text-right">Acesso</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                  {users.map(u => {
+                                      const hasAccess = u.permissions?.includes(permissionToEdit);
+                                      return (
+                                          <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                              <td className="p-3">
+                                                  <div className="flex items-center gap-3">
+                                                      <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300">
+                                                          {u.name.charAt(0)}
+                                                      </div>
+                                                      <div>
+                                                          <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{u.name}</div>
+                                                          <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
+                                                      </div>
+                                                  </div>
+                                              </td>
+                                              <td className="p-3">
+                                                  <span className="text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 uppercase font-bold">{u.role}</span>
+                                              </td>
+                                              <td className="p-3 text-right">
+                                                  <button 
+                                                      onClick={() => toggleUserPermissionFromAccessView(u, permissionToEdit)}
+                                                      className={`
+                                                          relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2
+                                                          ${hasAccess ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}
+                                                      `}
+                                                  >
+                                                      <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${hasAccess ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                  </button>
+                                              </td>
+                                          </tr>
+                                      );
+                                  })}
+                              </tbody>
+                          </table>
+                      </div>
+                      
+                      <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+                          <button onClick={() => setPermissionToEdit(null)} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm">
+                              Concluir Edição
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          );
+      })()}
+
     </div>
   );
 };
