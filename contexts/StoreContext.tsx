@@ -5,7 +5,7 @@ import { api } from '../services/api';
 
 interface StoreContextType extends AppState {
   login: (email: string, password?: string) => Promise<boolean>;
-  register: (name: string, email: string, password?: string) => Promise<boolean>; // Novo método
+  register: (name: string, email: string, password?: string) => Promise<boolean>;
   logout: () => void;
   toggleTheme: () => void;
   addPatient: (patient: Omit<Patient, 'id'>) => Promise<void>;
@@ -50,28 +50,27 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
     return (saved === 'dark' || saved === 'light') ? saved : 'light';
   });
 
-  // Load Initial Data (Simulating DB Fetch)
+  const loadData = async () => {
+      // Não bloqueia UI com loading full screen se já tiver dados, mas atualiza
+      try {
+          const [u, p, r, s] = await Promise.all([
+              api.users.getAll(),
+              api.patients.getAll(),
+              api.requests.getAll(),
+              api.specialties.getAll()
+          ]);
+          setUsers(u);
+          setPatients(p);
+          setRequests(r);
+          setSpecialties(s);
+      } catch (error) {
+          console.error("Failed to load initial data", error);
+      }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-        setIsLoading(true);
-        try {
-            const [u, p, r, s] = await Promise.all([
-                api.users.getAll(),
-                api.patients.getAll(),
-                api.requests.getAll(),
-                api.specialties.getAll()
-            ]);
-            setUsers(u);
-            setPatients(p);
-            setRequests(r);
-            setSpecialties(s);
-        } catch (error) {
-            console.error("Failed to load initial data", error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    loadData();
+    setIsLoading(true);
+    loadData().finally(() => setIsLoading(false));
   }, []);
 
   useEffect(() => {
@@ -94,6 +93,7 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
         const user = await api.auth.login(email, password);
         if (user) {
             setCurrentUser(user);
+            await loadData(); // Recarrega dados ao logar para garantir frescor
             return true;
         }
         return false;
@@ -105,12 +105,6 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
   const register = async (name: string, email: string, password?: string) => {
     setIsLoading(true);
     try {
-        // Verifica se usuário já existe
-        const existing = users.find(u => u.email === email);
-        if (existing) {
-            return false;
-        }
-
         const newUser = await api.users.create({
             name,
             email,
@@ -122,6 +116,9 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
         setUsers(prev => [...prev, newUser]);
         setCurrentUser(newUser); // Loga automaticamente
         return true;
+    } catch (error) {
+        console.error("Registration error in context:", error);
+        return false;
     } finally {
         setIsLoading(false);
     }
@@ -174,7 +171,7 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
     
     const payload = {
       ...data,
-      parentId: currentUser.id, // Enforce current user as parent
+      parentId: currentUser.id,
     };
 
     const newReq = await api.requests.create(payload);
@@ -196,8 +193,6 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   const saveReportDraft = async (requestId: string, content: string) => {
-    // Drafts don't necessarily need full re-render or global state update immediately, 
-    // but we update simulated DB.
     const updated = await api.requests.update(requestId, { therapistContent: content });
     if (updated) {
         setRequests(prev => prev.map(r => r.id === requestId ? updated : r));
@@ -248,15 +243,11 @@ export const StoreProvider = ({ children }: { children?: ReactNode }) => {
         status: 'APPROVED_BY_ADMIN',
         isSigned: true,
         completionDate: new Date().toISOString()
-        // In real backend, we would compose the PDF here
     });
 
     if (updated) {
-        // Need to update local state properly including the PDF URL if the backend changed it
         const finalPdfUrl = updated.pdfUrl || `relatorio_assinado_via_banco_${requestId}.pdf`;
-        // Ensure the local object has the simulated PDF url if not returned
         const finalObj = { ...updated, pdfUrl: finalPdfUrl };
-        
         setRequests(prev => prev.map(r => r.id === requestId ? finalObj : r));
         playSound('COMPLETED');
     }

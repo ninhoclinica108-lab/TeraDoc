@@ -28,19 +28,11 @@ const LoginScreen = () => {
     let success;
     if (isRegistering) {
         success = await register(name, email, password);
-        if (!success) setError('Este e-mail já está cadastrado.');
+        if (!success) setError('Erro ao criar conta. Verifique se o e-mail já existe ou a conexão.');
     } else {
         success = await login(email, password);
-        if (!success) setError('E-mail ou senha incorretos. Verifique suas credenciais.');
+        if (!success) setError('E-mail ou senha incorretos.');
     }
-  };
-
-  // Helper for Demo Buttons
-  const setDemoCredentials = (e: string, p: string) => {
-      setIsRegistering(false);
-      setEmail(e);
-      setPassword(p);
-      setError('');
   };
 
   return (
@@ -142,23 +134,6 @@ const LoginScreen = () => {
                     </button>
                 </p>
             </div>
-
-            {!isRegistering && (
-                <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
-                   <p className="text-xs text-center text-gray-400 mb-4 uppercase tracking-wider font-semibold">Acesso Rápido (Demonstração)</p>
-                   <div className="grid grid-cols-3 gap-2">
-                      <button onClick={() => setDemoCredentials('mae@teste.com', '123')} className="p-2 text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors">
-                         Responsável
-                      </button>
-                      <button onClick={() => setDemoCredentials('helena@teste.com', '123')} className="p-2 text-xs bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors">
-                         Terapeuta
-                      </button>
-                      <button onClick={() => setDemoCredentials('ninhoclinica108@gmail.com', 'Ninho@2025')} className="p-2 text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-                         Admin
-                      </button>
-                   </div>
-                </div>
-            )}
          </div>
          
          <p className="text-center text-gray-400 dark:text-gray-500 text-sm mt-6">

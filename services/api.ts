@@ -1,31 +1,27 @@
 import { User, Patient, ReportRequest, Specialty } from '../types';
 import { supabase } from './supabase';
 
-// Helper para gerar IDs (já que não estamos usando o auto-increment do banco para manter compatibilidade com o front atual)
-const generateId = () => Math.random().toString(36).substr(2, 9);
+// Helper para gerar IDs compatíveis com o tipo TEXT do banco
+const generateId = () => Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
 
 export const api = {
   auth: {
     login: async (email: string, password?: string): Promise<User | null> => {
-      // Nota: Estamos usando uma tabela 'users' customizada para manter a lógica de 
-      // "Admin cria usuário com senha simples" solicitada no projeto.
-      // Em produção real, deve-se usar supabase.auth.signInWithPassword
-      
       try {
         const { data, error } = await supabase
           .from('users')
           .select('*')
           .eq('email', email)
-          .eq('password', password) // Verificação direta para manter compatibilidade com o sistema legado/demo
+          .eq('password', password) // Comparação direta conforme solicitado
           .single();
 
-        if (error || !data) {
+        if (error) {
             console.error('Login error:', error);
             return null;
         }
         return data as User;
       } catch (e) {
-        console.error(e);
+        console.error("Auth Exception:", e);
         return null;
       }
     }
@@ -37,14 +33,24 @@ export const api = {
       return (data as User[]) || [];
     },
     create: async (data: Omit<User, 'id'>): Promise<User> => {
+      // Verifica duplicidade antes de tentar criar
+      const { data: existing } = await supabase.from('users').select('id').eq('email', data.email).single();
+      if (existing) {
+          throw new Error("Email already registered");
+      }
+
       const newUser = { ...data, id: generateId() };
+      
       const { data: inserted, error } = await supabase
         .from('users')
         .insert(newUser)
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+          console.error("Create User Error:", error);
+          throw error;
+      }
       return inserted as User;
     },
     updateSignature: async (userId: string, signatureUrl: string): Promise<User | null> => {
@@ -60,7 +66,7 @@ export const api = {
     },
     getById: async (id: string): Promise<User | undefined> => {
         const { data } = await supabase.from('users').select('*').eq('id', id).single();
-        return data as User;
+        return data as User || undefined;
     }
   },
 
